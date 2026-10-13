@@ -1,0 +1,18 @@
+# 2026-10-13 운영 macOS arm64 / Python 3.12의 직접 의존성 버전.
+# 전체 전이 의존성 lock이 아니며 새 OS에서 설치 검증은 별도로 필요합니다.
+python-dotenv==1.2.4
+httpx==0.28.1
+pydantic==2.14.0
+pykrx==1.2.9
+pandas==2.3.3
+numpy==2.5.3
+mplfinance==0.12.10b0
+matplotlib==3.11.2
+mlx-whisper==0.4.3; sys_platform == "darwin" and platform_machine == "arm64"
+whisper-timestamped==1.15.9
+google-api-python-client==2.201.0
+google-auth==2.61.0
+google-auth-oauthlib==1.5.0
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32

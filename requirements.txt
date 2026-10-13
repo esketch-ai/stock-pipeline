@@ -1,0 +1,31 @@
+# ── 코어 ──────────────────────────────────────────────
+python-dotenv>=1.0.1
+httpx>=0.27.0
+pydantic>=2.7.0
+
+# ── 1단계: 종목 스크리닝 (pykrx) ────────────────────────
+pykrx>=1.0.4
+pandas>=2.2.0
+numpy>=1.26.0
+
+# ── 2단계: 차트 렌더링 (4K 투명 PNG) ───────────────────
+mplfinance>=0.12.10b0
+matplotlib>=3.9.0
+
+# ── 3단계: 로컬 단어 타임스탬프 (Apple Silicon Metal 가속) ──
+# mlx-whisper: whisper.cpp/mlx 계열의 MPS 최적화 구현
+mlx-whisper>=0.4.0; sys_platform == "darwin" and platform_machine == "arm64"
+# 폴백: mlx 실패 시 whisper-timestamped (MPS 또는 CPU)
+whisper-timestamped>=1.15.8
+
+# ── 5단계: YouTube Data API v3 ─────────────────────────
+# segno: 오프라인 QR 생성 (외부 API 호출 없음)
+segno>=1.6.6
+google-api-python-client>=2.130.0
+google-auth>=2.30.0
+google-auth-oauthlib>=1.2.0
+
+# ── 대시보드 (FastAPI) ─────────────────────────────────
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12

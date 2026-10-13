@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>stock-pipeline 관리자</title>
+<link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+
+<!-- ═══ 헤더 ═══ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="mark"></span>
+    <div>
+      <div class="name">stock·pipeline</div>
+      <div class="sub">운영 관리자</div>
+    </div>
+  </div>
+
+  <div class="pills" id="pills"></div>
+
+  <div class="spacer"></div>
+
+  <div class="jobchip" id="jobchip" hidden>
+    <span class="spin"></span>
+    <span id="jobchip-text">작업 중</span>
+  </div>
+
+  <div class="topactions">
+    <button class="btn" data-open="diag">진단</button>
+    <button class="btn" data-open="logs">작업 로그</button>
+    <button class="btn primary" data-open="run">▶ 배치 실행</button>
+  </div>
+</header>
+
+<main class="shell">
+  <!-- ═══ 통계 ═══ -->
+  <section class="stats" id="stats"></section>
+  <div id="banner"></div>
+
+  <div class="layout">
+    <!-- ═══ 실행 이력 ═══ -->
+    <aside class="runs">
+      <div class="runs-head">
+        <span>실행 이력</span>
+        <button class="link" id="runs-reload">새로고침</button>
+      </div>
+      <div id="runs-list" class="runs-list">
+        <div class="skeleton-list"><span></span><span></span><span></span></div>
+      </div>
+    </aside>
+
+    <!-- ═══ 본문 ═══ -->
+    <section class="main">
+      <div id="runhead"></div>
+      <div id="toolbar" hidden>
+        <div class="search">
+          <input id="q" type="search" placeholder="종목명 · 코드 검색" autocomplete="off" />
+        </div>
+        <div class="chips" id="filters"></div>
+        <div class="spacer"></div>
+        <div class="seg" id="viewtoggle">
+          <button class="on" data-view="card">카드</button>
+          <button data-view="table">표</button>
+        </div>
+      </div>
+      <div id="content"></div>
+    </section>
+  </div>
+</main>
+
+<!-- ═══ 모달 공통 ═══ -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-card" id="modal-card">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-sub" id="modal-sub"></div>
+      </div>
+      <button class="icon-btn" id="modal-close" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

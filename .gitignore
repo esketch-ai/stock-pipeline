@@ -1,0 +1,26 @@
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+*.pyc
+data/
+state/
+cache/
+output/
+logs/
+dist/
+pages-deploy/
+remotion/node_modules/
+remotion/public/cache
+remotion/public/output
+remotion/public/data
+public-dashboard/data.json
+youtube_token.json
+contact.txt
+*client_secret*.json
+.DS_Store
+
+# launchd 는 사용자 경로가 하드코딩된다 — tools/portable.py prepare 가 생성한다
+com.stockpipeline.*.plist
