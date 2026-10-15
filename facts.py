@@ -162,6 +162,15 @@ def collect(ticker: str, name: str, market: str = "KOSPI", hist=None,
                 facts["news"] = [n["title"] for n in news_items]
                 log.debug("%s 네이버 뉴스 %d건 수집", ticker, len(facts["news"]))
 
+            # 4. 네이버 보조지표: 매물대 분석도 (Volume Profile)
+            ohlcv = naver_finance.fetch_ohlcv_naver(ticker, count=180)
+            if ohlcv:
+                vp = naver_finance.calculate_volume_profile(ohlcv)
+                if vp:
+                    facts["volume_profile"] = vp
+                    facts["poc_price"] = vp.get("poc_price")
+                    facts["is_above_poc"] = vp.get("is_above_poc")
+
             return facts
     except Exception as exc:
         log.debug("네이버 팩트 수집 실패 %s: %s (pykrx 폴백)", ticker, exc)
@@ -234,6 +243,12 @@ def format_facts(facts: dict) -> str:
     ]:
         if facts.get(key):
             lines.append(f"- {label}: {facts[key]}")
+    vp = facts.get("volume_profile")
+    if vp:
+        poc_p = vp.get("poc_price", 0)
+        poc_pct = vp.get("poc_pct", 0)
+        is_above = "상향 돌파(지지선 전환)" if vp.get("is_above_poc") else "하회(상단 매물벽 저항)"
+        lines.append(f"- 네이버 증권 매물 분석도: 최대 거래량 매물대 {poc_p:,.0f}원 (누적 {poc_pct}%), 현재 위치 {is_above}")
     if facts.get("researches"):
         lines.append("- 증권사 최신 리포트 및 투자 의견:")
         lines.extend(f"  · {r}" for r in facts["researches"][:3])

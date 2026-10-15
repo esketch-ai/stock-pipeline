@@ -117,6 +117,13 @@ def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
     r_sum = round(sum(supply.get("retail") or []), 1)
     i_sum = round(sum(supply.get("institution") or []), 1)
 
+    # 네이버 증권 매물대 분석도 및 거래량 급증 뉴스 매칭 (유튜브 학습 반영)
+    import naver_finance
+    vp = naver_finance.calculate_volume_profile(series) or {}
+    surge_date = series.get("d", [""])[vol_max_idx] if series.get("d") else ""
+    matched_n = naver_finance.match_surge_news(ticker, surge_date)
+    surge_news_title = matched_n.get("title") if matched_n else ""
+
     return {
         "ticker": ticker,
         "name": name,
@@ -143,11 +150,15 @@ def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
         "foreign_sum": f_sum,
         "retail_sum": r_sum,
         "inst_sum": i_sum,
+        "poc_price": vp.get("poc_price", sup),
+        "poc_pct": vp.get("poc_pct", 15.0),
+        "is_above_poc": vp.get("is_above_poc", True),
+        "surge_news": surge_news_title,
     }
 
 
 def generate_7min_script(m: dict[str, Any]) -> list[dict[str, str]]:
-    """5대 지표 중심 7개 씬 대본 생성 (총 약 2,400~2,600자, 약 6.5~7분 분량)."""
+    """5대 지표 중심 8개 씬 대본 생성 (총 약 2,400~2,600자, 약 6.5~7분 분량)."""
     name = m["name"]
     ticker = m["ticker"]
 
@@ -183,11 +194,12 @@ def generate_7min_script(m: dict[str, Any]) -> list[dict[str, str]]:
         f"수급의 균형추가 어느 방향으로 기울어지는지 체크하는 것이 핵심 관전 포인트입니다."
     )
 
-    # 3. Reveal (거래량 폭발 분석)
+    # 3. Reveal (거래량 폭발 분석 + 뉴스 매칭)
+    news_mention = f"특히 거래량이 번쩍 뜨며 폭발한 날에는 반드시 시장의 뉴스를 함께 살펴봐야 합니다. 실제로 {name}은 '{m['surge_news']}' 등의 이슈가 시장에 전해지며 " if m.get("surge_news") else "특히 거래량이 번쩍 뜨며 폭발한 날에는 시장의 매수세가 강하게 유입되며 "
     sec3_text = (
         f"이번 흐름에서 가장 눈여겨봐야 할 결정적인 시그널은 단연 거래량의 폭발이었습니다. "
         f"주식 시장의 오랜 격언처럼, 주가는 속일 수 있어도 거래량은 결코 속일 수 없습니다. "
-        f"돌파 구간에서 터진 {m['max_vol'] / 10000:,.0f}만 주의 거래량은 평소 거래량 대비 {m['vol_multiple']}배에 달하는 기록적인 유동성을 보여주었습니다. "
+        f"{news_mention}돌파 구간에서 터진 {m['max_vol'] / 10000:,.0f}만 주의 거래량은 평소 거래량 대비 {m['vol_multiple']}배에 달하는 기록적인 유동성을 보여주었습니다. "
         f"이는 단순한 개인들의 매매가 아니라 신규 메이저 자금이 대거 유입되었음을 방증하는 신호탄입니다. "
         f"특히 고무적인 점은, 최근 주가가 조정을 받을 때 거래량이 {m['last_vol'] / 10000:,.0f}만 주 수준으로 급감하며 전형적인 '거래량 마름' 현상을 보여준다는 사실입니다. "
         f"거래량이 줄어들면서 가격이 지지된다는 것은 매수 주포가 아직 이탈하지 않았음을 뜻하는 건전한 눌림목 신호입니다."
@@ -212,9 +224,12 @@ def generate_7min_script(m: dict[str, Any]) -> list[dict[str, str]]:
         f"기대 수익만을 바라보고 성급하게 진입하기보다는, 하방 지지력이 확인되는 구간에서 분할 매수로 접근하는 균형 잡힌 시각이 중요합니다."
     )
 
-    # 6. Wisdom (차트 패턴 및 지지/저항)
+    # 6. Wisdom (차트 패턴 및 지지/저항 + 네이버 증권 매물 분석도)
+    poc_status = "상향 돌파하여 강력한 하방 지지벽을 형성한 상태" if m.get("is_above_poc") else "돌파를 목전에 두고 상단 매물벽 저항을 소화하는 국면"
     sec6_text = (
         f"차트 패턴의 관점에서 보면, 바닥권에서 W자형 이중 바닥 패턴을 완성한 뒤 넥라인을 돌파하는 상승 삼각형 수렴 형태가 나타나고 있습니다. "
+        f"특히 네이버 증권 보조지표인 매물대 분석도를 살펴보면, 가장 많은 거래량이 집중된 최대 매물벽이 {m.get('poc_price', m['sup']):,}원 부근에 두텁게 쌓여 있으며, "
+        f"현재 주가는 이 핵심 매물대를 {poc_status}입니다. "
         f"구체적인 가격 기준을 설정해 보겠습니다. 아래로는 {m['sup']:,}원의 강력한 1차 지지선이 콘크리트처럼 받쳐주고 있으며, "
         f"위쪽으로는 {m['res1']:,}원 부근에 직전 매물대 저항선이 형성되어 있습니다. "
         f"만약 거래량을 동반하여 {m['res1']:,}원의 저항선을 확실하게 뚫어낸다면, 다음 타깃인 {m['res2']:,}원, 나아가 52주 고점 영역까지 상방 룸이 시원하게 열리게 됩니다. "

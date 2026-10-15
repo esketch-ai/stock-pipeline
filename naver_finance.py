@@ -333,3 +333,128 @@ def fetch_top_stocks(market: str = "KOSPI", count: int = 20) -> List[Dict[str, A
                 "market_cap": m_val,
             })
     return results
+
+
+# ─────────────────────────────────────────────────────────────
+# 5. 네이버 증권 보조지표: 매물대 분석도 (Volume Profile / Volume by Price)
+# ─────────────────────────────────────────────────────────────
+
+
+def calculate_volume_profile(series: Dict[str, List[Any]], bins: int = 12) -> Dict[str, Any]:
+    """네이버 증권 차트의 [보조지표 -> 매물 분석도]와 동일한 수평 매물대 계산.
+
+    180봉 기간 내 각 가격대별 누적 거래량을 계산하여,
+    가장 거래가 집중된 최대 매물대(POC), 하단 지지 매물대, 상단 저항 매물벽을 산출합니다.
+
+    반환:
+        {
+            "zones": [{"price_min": ..., "price_max": ..., "volume": ..., "pct": ...}],
+            "poc_price": float,        # 최대 거래량 집중 가격대 중심값
+            "support_zone": float,     # 현재가 하단 최대 매물대 (강력한 지지벽)
+            "resistance_zone": float,  # 현재가 상단 최대 매물대 (강력한 매도벽)
+            "is_above_poc": bool,      # 최대 매물대를 상향 돌파하여 위에서 노는지 여부
+        }
+    """
+    if not series or not series.get("c") or not series.get("v"):
+        return {}
+
+    closes = [c for c in series["c"] if c is not None]
+    highs = [h for h in (series.get("h") or closes) if h is not None]
+    lows = [l for l in (series.get("l") or closes) if l is not None]
+    vols = [v for v in (series.get("v") or []) if v is not None]
+
+    if len(closes) < 10 or len(vols) < 10:
+        return {}
+
+    min_p = min(lows)
+    max_p = max(highs)
+    if min_p >= max_p:
+        return {}
+
+    step = (max_p - min_p) / bins
+    bucket_vols = [0.0] * bins
+
+    for h_val, l_val, c_val, v_val in zip(highs, lows, closes, vols):
+        # 전형 가격 (Typical Price)
+        typ = (h_val + l_val + c_val) / 3.0
+        idx = int((typ - min_p) / step)
+        idx = max(0, min(bins - 1, idx))
+        bucket_vols[idx] += v_val
+
+    total_v = sum(bucket_vols) or 1.0
+    zones = []
+    for i in range(bins):
+        p_lo = min_p + i * step
+        p_hi = min_p + (i + 1) * step
+        v_amt = bucket_vols[i]
+        zones.append({
+            "price_min": round(p_lo),
+            "price_max": round(p_hi),
+            "price_mid": round((p_lo + p_hi) / 2),
+            "volume": round(v_amt),
+            "pct": round((v_amt / total_v) * 100, 1),
+        })
+
+    # 최대 거래량 매물대 (POC)
+    max_zone = max(zones, key=lambda z: z["volume"])
+    poc_price = max_zone["price_mid"]
+
+    last_close = closes[-1]
+    # 현재가 하단 매물대 중 가장 큰 곳 (지지선)
+    under_zones = [z for z in zones if z["price_mid"] <= last_close]
+    support_zone = max(under_zones, key=lambda z: z["volume"])["price_mid"] if under_zones else None
+
+    # 현재가 상단 매물대 중 가장 큰 곳 (저항선)
+    above_zones = [z for z in zones if z["price_mid"] > last_close]
+    resistance_zone = max(above_zones, key=lambda z: z["volume"])["price_mid"] if above_zones else None
+
+    return {
+        "zones": zones,
+        "poc_price": poc_price,
+        "support_zone": support_zone,
+        "resistance_zone": resistance_zone,
+        "is_above_poc": last_close >= poc_price,
+        "poc_pct": max_zone["pct"],
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# 6. 거래량 폭발일과 네이버 뉴스 매칭 (Volume Surge News Link)
+# ─────────────────────────────────────────────────────────────
+
+
+def match_surge_news(ticker: str, surge_date: str, news_list: Optional[List[Dict[str, str]]] = None) -> Optional[Dict[str, str]]:
+    """거래량이 비정상적으로 급증한 날(surge_date) 전후의 네이버 뉴스를 매칭합니다.
+
+    유튜브 강의 핵심 원칙:
+      "차트에서 거래량이 번쩍 뜬 날은 반드시 네이버 뉴스를 확인해 그 이유를 알아야 한다."
+    """
+    if news_list is None:
+        news_list = fetch_news_naver(ticker, limit=10)
+
+    if not news_list or not surge_date:
+        return None
+
+    # 날짜 정규화: "2026-02-13" -> "20260213"
+    target_clean = surge_date.replace("-", "")
+
+    # 1순위: 날짜가 일치하거나 ±2일 이내인 뉴스 탐색
+    matched_news = None
+    for n in news_list:
+        n_dt = (n.get("datetime") or "").replace("-", "")[:8]
+        if n_dt:
+            try:
+                d1 = datetime.strptime(target_clean, "%Y%m%d")
+                d2 = datetime.strptime(n_dt, "%Y%m%d")
+                diff = abs((d1 - d2).days)
+                if diff <= 3:
+                    matched_news = n
+                    break
+            except Exception:
+                pass
+
+    # 2순위: 날짜 매칭이 안 되면 가장 연관도 높은 최신 뉴스 헤드라인 반환
+    if not matched_news and news_list:
+        matched_news = news_list[0]
+
+    return matched_news

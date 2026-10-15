@@ -318,4 +318,18 @@ def support_resistance(series: dict[str, Any], lookback: int = 90) -> dict[str, 
         if resistance else None,
         "at_high": resistance is None,
     }
+
+    # 네이버 증권 보조지표 [매물 분석도] 결합
+    try:
+        import naver_finance
+        vp = naver_finance.calculate_volume_profile(series)
+        if vp:
+            out["volume_profile"] = vp
+            if vp.get("support_zone") and not swing_lows:
+                out["support"] = vp["support_zone"]
+            if vp.get("resistance_zone") and not swing_highs:
+                out["resistance"] = vp["resistance_zone"]
+    except Exception as exc:
+        log.debug("매물대 분석도 계산 실패: %s", exc)
+
     return out
