@@ -174,16 +174,29 @@ def build_scenes(
     rsi_vals = [r for r in (series.get("rsi") or []) if r is not None]
     rsi_now = rsi_vals[-1] if rsi_vals else None
 
-    # 씬 설계표 — (id, eyebrow, 차트 종류)
-    PLAN = [
-        ("hook", "오늘의 장면", "title"),
-        ("setup", "수급", "supply"),
-        ("reveal", "가격", "price"),
-        ("deep_dive", "추세", "trend"),
-        ("risk", "리스크", "momentum"),
-        ("wisdom", "전략", "levels"),
-        ("outro", "마무리", "closing"),
-    ]
+    # 씬 설계표 — sections 에 selection 이 포함되어 있으면 8개 씬, 아니면 레거시 7개 씬
+    has_selection = any(s.get("id") == "selection" for s in sections)
+    if has_selection:
+        PLAN = [
+            ("selection", "종목 선정 이유", "selection"),
+            ("hook", "캔들 분석", "price"),
+            ("setup", "수급", "supply"),
+            ("reveal", "거래량", "price"),
+            ("deep_dive", "추세", "trend"),
+            ("risk", "리스크", "momentum"),
+            ("wisdom", "전략", "levels"),
+            ("outro", "마무리", "closing"),
+        ]
+    else:
+        PLAN = [
+            ("hook", "오늘의 장면", "title"),
+            ("setup", "수급", "supply"),
+            ("reveal", "가격", "price"),
+            ("deep_dive", "추세", "trend"),
+            ("risk", "리스크", "momentum"),
+            ("wisdom", "전략", "levels"),
+            ("outro", "마무리", "closing"),
+        ]
 
     scenes: list[dict] = []
     for idx, (sid, eyebrow, chart) in enumerate(PLAN):
@@ -203,7 +216,7 @@ def build_scenes(
             "headline": headline,
             "sub": sub,
             "stats": stats,
-            "chart": chart if chart != "title" else "price",
+            "chart": "price" if chart in ("title", "selection") else chart,
             "from": t0,
             "to": t1,
             "section_title": sec.get("title") or eyebrow,
@@ -231,6 +244,25 @@ def _scene_content(*, chart, name, ticker, facts, series, supply, levels,
     """
     chg = _num(facts.get("change_rate"))
     vol_ratio = _num(facts.get("volume_ratio"))
+
+    if chart == "selection":
+        stats = []
+        if last_close:
+            stats.append({"label": "현재가", "value": _fmt_price(last_close)})
+        if chg is not None:
+            stats.append({"label": "등락률", "value": _fmt_pct(chg),
+                          "tone": "up" if chg >= 0 else "down"})
+        vr = vol_ratio or _num(facts.get("vol_multiple"))
+        if vr:
+            stats.append({"label": "거래량 폭증", "value": f"{vr:.1f}배", "tone": "up"})
+
+        head = "거래량 폭발 속 핵심 변곡점 포착"
+        if vr and vr >= 1.8:
+            head = f"거래량 {vr:.1f}배 폭발 속 바닥 탈출 시그널"
+        elif chg is not None and abs(chg) >= 5.0:
+            head = f"변동률 {chg:+.1f}% 속 강한 추세 전환 포착"
+        sub = f"주차뿌까 차트 알고리즘이 선정한 오늘의 핵심 타깃 종목"
+        return head, sub, stats
 
     if chart == "title":
         stats = []

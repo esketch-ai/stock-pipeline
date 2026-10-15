@@ -181,6 +181,25 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
 
     scene_map = {s.get("id"): s for s in scenes}
 
+    # Scene 0: selection (종목 선정 배경 및 이유)
+    s0 = scene_map.get("selection")
+    if s0:
+        t0, t1 = s0["from"], s0["to"]
+        max_v = series.get("v", [0])[vol_max_idx] or 1000000
+        annotations.append({
+            "id": "ann-selection-signal",
+            "from": round(t0 + 1.0, 2),
+            "to": round(t1 - 0.6, 2),
+            "kind": "box",
+            "panel": "price",
+            "index": vol_max_idx,
+            "title": "주차뿌까 타격 시그널 포착",
+            "sub": f"거래량 폭발({max_v / 10000:,.0f}만 주) 및 바닥 탈출 변곡점",
+            "tone": "accent",
+            "drawDuration": 0.55,
+            "eraseDuration": 0.4
+        })
+
     # Scene 1: hook (캔들스틱 분석)
     s1 = scene_map.get("hook")
     if s1:

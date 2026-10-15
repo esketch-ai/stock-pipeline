@@ -760,7 +760,7 @@ const SceneView: React.FC<{
       ? 'trend'
       : scene.chart === 'momentum'
       ? 'momentum'
-      : scene.chart === 'levels' || scene.chart === 'price'
+      : scene.chart === 'levels' || scene.chart === 'price' || scene.chart === 'selection'
       ? 'price'
       : 'return';
 
