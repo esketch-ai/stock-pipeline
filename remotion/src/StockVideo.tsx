@@ -4,6 +4,7 @@ import {
   Audio,
   Img,
   interpolate,
+  spring,
   useCurrentFrame,
   useVideoConfig,
   staticFile,
@@ -71,7 +72,7 @@ const AnimatedBackdrop: React.FC<{ sectionProgress: number }> = ({ sectionProgre
   );
 };
 
-/** 시네마틱 타이틀 카드 — 첫 N초 */
+/** 주차뿌까 시네마틱 인트로 카드 — 첫 N초 */
 const TitleCard: React.FC<{
   name: string;
   ticker: string;
@@ -80,83 +81,108 @@ const TitleCard: React.FC<{
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const fade = interpolate(frame, [0, fps * 0.5, durationFrames - fps * 0.5, durationFrames], [0, 1, 1, 0], {
+  const fade = interpolate(frame, [0, fps * 0.35, durationFrames - fps * 0.4, durationFrames], [0, 1, 1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
 
-  const scale = interpolate(frame, [0, durationFrames], [1.15, 0.92], {
+  const bgScale = interpolate(frame, [0, durationFrames], [1.06, 1.0], {
     extrapolateRight: 'clamp',
   });
 
-  // 문자열 글자별 등장
-  const chars = name.split('');
+  const titleRise = spring({
+    frame: Math.max(0, frame - 10),
+    fps,
+    config: { damping: 14, stiffness: 120 },
+  });
+
   return (
     <ScaleLayer>
-      <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', opacity: fade }}>
-      <div
-        style={{
-          transform: `scale(${scale})`,
-          textAlign: 'center',
-          fontFamily: 'Apple SD Gothic Neo, Pretendard, sans-serif',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
-          {chars.map((ch, i) => {
-            const charFrame = i * 2;
-            const charOpacity = interpolate(frame, [charFrame, charFrame + 10], [0, 1], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-            });
-            const charY = interpolate(frame, [charFrame, charFrame + 10], [40, 0], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-            });
-            return (
-              <span
-                key={i}
-                style={{
-                  color: '#FFFFFF',
-                  fontSize: 140,
-                  fontWeight: 900,
-                  opacity: charOpacity,
-                  transform: `translateY(${charY}px)`,
-                  letterSpacing: -2,
-                }}
-              >
-                {ch}
-              </span>
-            );
-          })}
-        </div>
-        <div
+      <AbsoluteFill style={{ opacity: fade, backgroundColor: '#0B1220', overflow: 'hidden' }}>
+        {/* 주차뿌까 공식 메인 인트로 그래픽 */}
+        <img
+          src={staticFile('brand/jucha_main.png')}
           style={{
-            color: '#FFD60A',
-            fontSize: 48,
-            fontWeight: 800,
-            letterSpacing: 12,
-            opacity: interpolate(frame, [fps, fps + 20], [0, 1], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-            }),
-          }}
-        >
-          {ticker}
-        </div>
-        <div
-          style={{
-            width: 320,
-            height: 3,
-            background: 'linear-gradient(90deg, transparent, #FFD60A, transparent)',
-            margin: '28px auto 0',
-            opacity: interpolate(frame, [fps * 1.2, fps * 1.8], [0, 1], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-            }),
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transform: `scale(${bgScale})`,
+            filter: 'brightness(0.92) contrast(1.04)',
           }}
         />
-      </div>
-    </AbsoluteFill>
+
+        {/* 하단 시네마틱 비네트 그라디언트 */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background:
+              'radial-gradient(circle at center, transparent 40%, rgba(11,18,32,0.6) 100%), linear-gradient(180deg, rgba(11,18,32,0.3) 0%, transparent 45%, rgba(11,18,32,0.92) 85%, #0B1220 100%)',
+          }}
+        />
+
+        {/* 분석 대상 종목 헤드라인 팝업 배지 (하단 중앙 자막 위) */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 155,
+            left: 0,
+            right: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: `translateY(${(1 - titleRise) * 45}px)`,
+            opacity: titleRise,
+            fontFamily: 'Apple SD Gothic Neo, Pretendard, sans-serif',
+          }}
+        >
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 24px',
+              borderRadius: 30,
+              background: 'rgba(255, 59, 48, 0.95)',
+              boxShadow: '0 8px 24px rgba(255, 59, 48, 0.55)',
+              marginBottom: 10,
+            }}
+          >
+            <span style={{ color: '#FFFFFF', fontSize: 22, fontWeight: 900, letterSpacing: 1.5 }}>
+              차트 정밀 타격 분석
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
+            <span
+              style={{
+                color: '#FFFFFF',
+                fontSize: 72,
+                fontWeight: 900,
+                letterSpacing: -2,
+                textShadow: '0 6px 30px rgba(0,0,0,0.95)',
+              }}
+            >
+              {name}
+            </span>
+            <span
+              style={{
+                color: '#FFD60A',
+                fontSize: 38,
+                fontWeight: 900,
+                fontFamily: 'SF Mono, Menlo, monospace',
+                letterSpacing: 3,
+                textShadow: '0 4px 20px rgba(0,0,0,0.85)',
+              }}
+            >
+              {ticker}
+            </span>
+          </div>
+        </div>
+      </AbsoluteFill>
     </ScaleLayer>
   );
 };
@@ -447,7 +473,7 @@ const InfoBar: React.FC<{
           </span>
         )}
       </div>
-      {/* 우하단 안내 — 제공자 정보가 등록된 경우에만 나타난다 */}
+      {/* 우하단 안내 — 면책 고지 및 채널 브랜딩 */}
       <div
         style={{
           position: 'absolute',
@@ -464,36 +490,52 @@ const InfoBar: React.FC<{
         }}
       >
         <span style={{ color: '#5C6B8A', fontSize: Math.round(width * 0.0068), fontWeight: 600 }}>
-          투자 정보 · 권유 아님
+          투자 참고용 · 매수매도 권유 아님
         </span>
-        {contact.provider || contact.rows?.length ? (
-          <>
-            <span style={{ color: '#39445A', fontSize: Math.round(width * 0.0068) }}>|</span>
-            <span style={{ color: '#7D8DA8', fontSize: Math.round(width * 0.0068), fontWeight: 600 }}>
-              {[contact.provider, ...(contact.rows ?? []).map((r) => r.value)].filter(Boolean).join(' · ')}
-            </span>
-          </>
-        ) : null}
+        <span style={{ color: '#39445A', fontSize: Math.round(width * 0.0068) }}>|</span>
+        <span style={{ color: '#7D8DA8', fontSize: Math.round(width * 0.0068), fontWeight: 700 }}>
+          주차뿌까 차트 정밀 타격
+        </span>
       </div>
-      {contact.qrSrc && persistentQr ? (
+
+      {/* 우상단 주차뿌까 공식 워터마크 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: Math.round(width * 0.012),
+          right: Math.round(width * 0.018),
+          display: 'flex',
+          alignItems: 'center',
+          gap: Math.round(width * 0.005),
+          opacity: interpolate(frame, [fps, fps * 2], [0, 0.88], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
+          pointerEvents: 'none',
+        }}
+      >
         <img
-          src={staticFile(contact.qrSrc)}
+          src={staticFile('brand/jucha_watermark.png')}
           style={{
-            position: 'absolute',
-            top: Math.round(width * 0.012),
-            right: Math.round(width * 0.016),
-            width: Math.round(width * 0.052),
-            height: Math.round(width * 0.052),
-            background: '#FFFFFF',
-            padding: Math.round(width * 0.0025),
+            width: Math.round(width * 0.024),
+            height: Math.round(width * 0.024),
             borderRadius: 6,
-            opacity: interpolate(frame, [fps * 2, fps * 4], [0, 0.92], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-            }),
+            filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.7))',
           }}
         />
-      ) : null}
+        <span
+          style={{
+            color: '#FFD60A',
+            fontSize: Math.round(width * 0.0088),
+            fontWeight: 900,
+            fontFamily: 'Apple SD Gothic Neo, Pretendard, sans-serif',
+            letterSpacing: -0.2,
+            textShadow: '0 2px 10px rgba(0,0,0,0.9)',
+          }}
+        >
+          주차뿌까
+        </span>
+      </div>
     </>
   );
 };
