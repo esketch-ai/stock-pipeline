@@ -54,7 +54,7 @@ export const useChartCamera = ({
   const zoomable = annotations.filter(
     (a) =>
       ZOOMABLE_IDS.has(a.id) &&
-      (a.kind === 'box' || a.kind === 'pointer') &&
+      (a.kind === 'box' || a.kind === 'pointer' || a.kind === 'circle' || a.kind === 'underline') &&
       a.index !== undefined &&
       a.index >= 0
   );

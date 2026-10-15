@@ -96,56 +96,123 @@ def collect(ticker: str, name: str, market: str = "KOSPI", hist=None,
             history_days: int = HISTORY_DAYS) -> dict:
     """대본 프롬프트에 주입할 팩트 묶음.
 
-    모든 가격은 차트와 동일한 기간 / 동일한 adjusted 기준에서 가져온다.
+    1차 우선: 네이버 증권(stock.naver.com) 서비스 정보
+    2차 폴백: pykrx
     """
-    from pykrx import stock
-
     facts: dict = {
         "ticker": ticker, "name": name, "market": market,
         "news": [], "history_days": history_days,
+        "researches": [],
     }
 
-    basic = _safe(lambda: stock.get_market_ticker_name(ticker), label="name")
-    if basic:
-        facts["name"] = basic
+    # 1. 네이버 증권 서비스 API 우선 수집
+    try:
+        import naver_finance
+        integ = naver_finance.fetch_stock_integration(ticker)
+        if integ and integ.get("name"):
+            facts["name"] = integ["name"]
+            info = integ.get("info", {})
+            if "시총" in info:
+                facts["market_cap"] = info["시총"]
+            if "현재가" in info:
+                facts["close"] = info["현재가"]
+                try:
+                    facts["close_raw"] = float(info["현재가"].replace(",", ""))
+                except Exception:
+                    pass
+            if "52주 최고" in info:
+                facts["high_52w"] = info["52주 최고"]
+                try:
+                    hi = float(info["52주 최고"].replace(",", ""))
+                    cur = facts.get("close_raw", 0.0)
+                    if hi > 0 and cur > 0:
+                        facts["from_high"] = f"{(cur / hi - 1) * 100:.1f}%"
+                except Exception:
+                    pass
+            if "52주 최저" in info:
+                facts["low_52w"] = info["52주 최저"]
+                try:
+                    lo = float(info["52주 최저"].replace(",", ""))
+                    hi = float(info["52주 최고"].replace(",", ""))
+                    cur = facts.get("close_raw", 0.0)
+                    if hi > lo and cur >= lo:
+                        pos = (cur - lo) / (hi - lo) * 100
+                        facts["range_pos"] = f"{pos:.0f}%"
+                except Exception:
+                    pass
+            if "대금" in info:
+                facts["trading_value"] = info["대금"]
+            if "PER" in info:
+                facts["per"] = info["PER"]
+            if "PBR" in info:
+                facts["pbr"] = info["PBR"]
 
-    tday = _safe(
-        lambda: stock.get_nearest_business_day_in_a_week(
-            datetime.now().strftime("%Y%m%d"), prev=True),
-        label="trading_day")
-    facts["trading_day"] = tday
+            consensus = integ.get("consensus", {})
+            if consensus.get("target_price"):
+                facts["target_price"] = consensus["target_price"]
+            if consensus.get("opinion"):
+                facts["consensus_opinion"] = consensus["opinion"]
 
-    # 차트와 동일한 기간/동일한 adjusted 기준의 시세
-    series = hist if (hist is not None and len(hist)) else _safe(
-        lambda: _fetch_history(stock, ticker, tday, history_days), label="history")
+            if integ.get("researches"):
+                facts["researches"] = [f"{r['broker']}: {r['title']}" for r in integ["researches"][:3]]
 
-    if series is not None and len(series):
-        last = series.iloc[-1]
-        cur = float(last["종가"])
-        facts["close"] = _fmt_price(cur)
-        facts["close_raw"] = cur
-        if len(series) > 1:
-            prev_close = float(series["종가"].iloc[-2])
-            chg = (cur / prev_close - 1) * 100 if prev_close else 0.0
-            facts["change_rate"] = f"{chg:+.2f}%"
-            facts["change_raw"] = chg
-        hi = float(series["고가"].max())
-        lo = float(series["저가"].min())
-        pos = (cur - lo) / (hi - lo) * 100 if hi > lo else 50
-        facts["high_52w"] = _fmt_price(hi)
-        facts["low_52w"] = _fmt_price(lo)
-        facts["range_pos"] = f"{pos:.0f}%"
-        facts["from_high"] = f"{(cur / hi - 1) * 100:.1f}%"
-        facts["range_days"] = len(series)
+            # 최신 뉴스 수집
+            news_items = naver_finance.fetch_news_naver(ticker, limit=4)
+            if news_items:
+                facts["news"] = [n["title"] for n in news_items]
+                log.debug("%s 네이버 뉴스 %d건 수집", ticker, len(facts["news"]))
 
-    snap = _safe(
-        lambda: stock.get_market_ohlcv_by_ticker(tday, market=market), label="snapshot")
-    if snap is not None and ticker in snap.index and len(snap):
-        facts["market_cap"] = _fmt_int(snap.loc[ticker].get("시가총액"))
+            return facts
+    except Exception as exc:
+        log.debug("네이버 팩트 수집 실패 %s: %s (pykrx 폴백)", ticker, exc)
 
-    facts["news"] = _naver_news(ticker, name)
-    if facts["news"]:
-        log.debug("%s 뉴스 %d건 수집", ticker, len(facts["news"]))
+    # 2. 폴백: pykrx
+    try:
+        from pykrx import stock
+
+        basic = _safe(lambda: stock.get_market_ticker_name(ticker), label="name")
+        if basic:
+            facts["name"] = basic
+
+        tday = _safe(
+            lambda: stock.get_nearest_business_day_in_a_week(
+                datetime.now().strftime("%Y%m%d"), prev=True),
+            label="trading_day")
+        facts["trading_day"] = tday
+
+        # 차트와 동일한 기간/동일한 adjusted 기준의 시세
+        series = hist if (hist is not None and len(hist)) else _safe(
+            lambda: _fetch_history(stock, ticker, tday, history_days), label="history")
+
+        if series is not None and len(series):
+            last = series.iloc[-1]
+            cur = float(last["종가"])
+            facts["close"] = _fmt_price(cur)
+            facts["close_raw"] = cur
+            if len(series) > 1:
+                prev_close = float(series["종가"].iloc[-2])
+                chg = (cur / prev_close - 1) * 100 if prev_close else 0.0
+                facts["change_rate"] = f"{chg:+.2f}%"
+                facts["change_raw"] = chg
+            hi = float(series["고가"].max())
+            lo = float(series["저가"].min())
+            pos = (cur - lo) / (hi - lo) * 100 if hi > lo else 50
+            facts["high_52w"] = _fmt_price(hi)
+            facts["low_52w"] = _fmt_price(lo)
+            facts["range_pos"] = f"{pos:.0f}%"
+            facts["from_high"] = f"{(cur / hi - 1) * 100:.1f}%"
+            facts["range_days"] = len(series)
+
+        snap = _safe(
+            lambda: stock.get_market_ohlcv_by_ticker(tday, market=market), label="snapshot")
+        if snap is not None and ticker in snap.index and len(snap):
+            facts["market_cap"] = _fmt_int(snap.loc[ticker].get("시가총액"))
+
+        if not facts["news"]:
+            facts["news"] = _naver_news(ticker, name)
+    except Exception as exc:
+        log.warning("pykrx 팩트 수집 실패 %s: %s", ticker, exc)
+
     return facts
 
 
@@ -161,9 +228,15 @@ def format_facts(facts: dict) -> str:
         ("low_52w", "52주 저가"),
         ("range_pos", "52주 레인지 내 현재 위치"),
         ("from_high", "신고가 대비"),
+        ("target_price", "증권사 평균 목표주가"),
+        ("per", "PER"),
+        ("pbr", "PBR"),
     ]:
         if facts.get(key):
             lines.append(f"- {label}: {facts[key]}")
+    if facts.get("researches"):
+        lines.append("- 증권사 최신 리포트 및 투자 의견:")
+        lines.extend(f"  · {r}" for r in facts["researches"][:3])
     if facts.get("news"):
         lines.append("- 최근 뉴스 헤드라인(참고용, 사실 확인된 것 아님):")
         lines.extend(f"  · {n}" for n in facts["news"][:4])

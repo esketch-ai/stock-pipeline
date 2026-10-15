@@ -185,6 +185,27 @@ def _semantic_points(df, ret) -> dict[str, int]:
     }
 
 
+def fetch_series_naver(ticker: str, max_bars: int = MAX_BARS) -> dict[str, Any] | None:
+    """네이버 증권 서비스 API에서 OHLCV 데이터를 수집하여 Remotion 차트용 Series 생성."""
+    try:
+        import naver_finance
+        ohlcv = naver_finance.fetch_ohlcv_naver(ticker, count=max_bars)
+        if not ohlcv or not ohlcv.get("c"):
+            return None
+        import pandas as pd
+        df = pd.DataFrame({
+            "시가": ohlcv["o"],
+            "고가": ohlcv["h"],
+            "저가": ohlcv["l"],
+            "종가": ohlcv["c"],
+            "거래량": ohlcv["v"],
+        }, index=pd.to_datetime(ohlcv["d"]))
+        return to_series(df, max_bars=max_bars)
+    except Exception as exc:
+        log.warning("네이버 차트 수집 실패 %s: %s", ticker, exc)
+        return None
+
+
 def series_from_manifest(item: dict) -> dict[str, Any] | None:
     """manifest item 에서 series 를 안전하게 꺼낸다."""
     s = item.get("series")
@@ -201,41 +222,51 @@ def series_from_manifest(item: dict) -> dict[str, Any] | None:
 def fetch_supply(ticker: str, days: int = 60, end: str | None = None) -> dict[str, Any] | None:
     """투자자별 순매수 시계열 (기관 / 개인 / 외국인), 억 단위.
 
-    pykrx 는 금액을 원 단위로 준다. 데이터가 없으면 None 을 돌려준다 —
-    씬이 차트 없이 텍스트로만 진행된다.
+    1차 우선: 네이버 증권 서비스 API (고속, 실시간)
+    2차 폴백: pykrx
     """
     try:
-        from pykrx import stock
-    except ImportError:  # pragma: no cover
-        return None
+        import naver_finance
+        integ = naver_finance.fetch_stock_integration(ticker)
+        deal_trends = integ.get("deal_trends", [])
+        if deal_trends:
+            chrono = list(reversed(deal_trends))
+            return {
+                "d": [x["date"] for x in chrono],
+                "institution": [round((x["institution"] * x["close"]) / 1e8, 2) for x in chrono],
+                "retail": [round((x["retail"] * x["close"]) / 1e8, 2) for x in chrono],
+                "foreign": [round((x["foreign"] * x["close"]) / 1e8, 2) for x in chrono],
+                "other": [0.0] * len(chrono),
+            }
+    except Exception as exc:
+        log.debug("네이버 수급 조회 실패 %s: %s", ticker, exc)
 
     try:
+        from pykrx import stock
         import screening as _scr
 
         end = end or _scr.last_trading_day(stock)
         start = (datetime.strptime(end, "%Y%m%d") - timedelta(days=days)).strftime("%Y%m%d")
         df = stock.get_market_trading_value_by_date(start, end, ticker)
+        if df is not None and len(df) >= 3:
+            df = df.drop(columns=["전체"], errors="ignore").fillna(0)
+
+            def col(name: str) -> list[float]:
+                if name not in df.columns:
+                    return [0.0] * len(df)
+                return [round(float(v) / 1e8, 2) for v in df[name]]
+
+            return {
+                "d": [d.strftime("%Y-%m-%d") for d in df.index],
+                "institution": col("기관합계"),
+                "retail": col("개인"),
+                "foreign": col("외국인합계"),
+                "other": col("기타법인"),
+            }
     except Exception as exc:
-        log.debug("수급 조회 실패 %s: %s", ticker, exc)
-        return None
+        log.debug("pykrx 수급 조회 실패 %s: %s", ticker, exc)
 
-    if df is None or len(df) < 3:
-        return None
-
-    df = df.drop(columns=["전체"], errors="ignore").fillna(0)
-
-    def col(name: str) -> list[float]:
-        if name not in df.columns:
-            return [0.0] * len(df)
-        return [round(float(v) / 1e8, 2) for v in df[name]]
-
-    return {
-        "d": [d.strftime("%Y-%m-%d") for d in df.index],
-        "institution": col("기관합계"),
-        "retail": col("개인"),
-        "foreign": col("외국인합계"),
-        "other": col("기타법인"),
-    }
+    return None
 
 
 # ─────────────────────────────────────────────────────────────
