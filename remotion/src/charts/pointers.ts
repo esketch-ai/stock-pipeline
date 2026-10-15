@@ -12,7 +12,7 @@ import { stackPanels, type Panel, VB } from './theme';
 import { extentOf, scaleX, scaleY, type Series } from './scale';
 import type { ChartKind } from './index';
 
-const PANELS_OF: Record<ChartKind, Panel[]> = {
+export const PANELS_OF: Record<ChartKind, Panel[]> = {
   price: ['price', 'volume'],
   trend: ['price'],
   momentum: ['price', 'rsi'],
@@ -53,7 +53,7 @@ export const specToXY = (
   };
 };
 
-const valueForPanel = (
+export const valueForPanel = (
   panel: Panel,
   series: Series,
   i: number
@@ -69,7 +69,7 @@ const valueForPanel = (
   return null;
 };
 
-const domainForPanel = (panel: Panel, series: Series): [number, number] | null => {
+export const domainForPanel = (panel: Panel, series: Series): [number, number] | null => {
   const n = series.c.length;
   if (panel === 'rsi') return [0, 100];
   if (panel === 'volume') {

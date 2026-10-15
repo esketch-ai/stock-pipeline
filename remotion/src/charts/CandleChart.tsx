@@ -193,22 +193,22 @@ export const CandleChart: React.FC<{
         <g opacity={tagIn}>
           <rect
             x={priceRect.x + priceRect.w + 8}
-            y={py(shownPrice) - 26}
+            y={py(shownPrice) - 16}
             width={TAG_W}
-            height={52}
+            height={32}
             fill={C.accent}
             rx={6}
           />
           <text
             x={priceRect.x + priceRect.w + 8 + TAG_W / 2}
-            y={py(shownPrice) + 9}
+            y={py(shownPrice) + 6}
             textAnchor="middle"
             fill="#0B1220"
-            fontSize={26}
-            fontWeight={800}
+            fontSize={18}
+            fontWeight={900}
             fontFamily={MONO}
           >
-            {fmtPrice(shownPrice)}
+            {fmtPrice(shownPrice)}원
           </text>
         </g>
       )}

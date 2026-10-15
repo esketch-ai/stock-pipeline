@@ -18,9 +18,11 @@ import type { ContactPayload } from './types';
 import { SceneHeadline, SceneStats, sceneAt, type Scene } from './scenes/SceneFrame';
 import { SupplyChart, type Supply } from './scenes/SupplyChart';
 import { ClosingCard } from './scenes/ClosingCard';
-import { InvestorInsightScene } from './components/InvestorCharacter';
+import { InvestorCharacter, InvestorInsightScene } from './components/InvestorCharacter';
+import type { InvestorInsight } from './components/investorProfiles';
 import { DustMotes, FilmGrain, PulseGlow, ScaleLayer, SceneWipe, Vignette } from './components/Vfx';
-import { investorProfiles, type InvestorInsight } from './components/investorProfiles';
+import { ChartAnnotationLayer, type ChartAnnotation } from './components/ChartAnnotationLayer';
+import { useChartCamera } from './components/useChartCamera';
 
 const BACKPAD_SAFE = '#0B1220';
 
@@ -268,17 +270,76 @@ const buildPhrases = (words: WordTimestamp[]): Phrase[] => {
   return phrases;
 };
 
-/** 하단 시네마틱 자막 — 문장 구간 단위 */
-const CinematicCaption: React.FC<{
+/** 하단 시네마틱 자막 — 스크립트 원본 문장 100% 매칭 (STT 오인식 제로) */
+const ScriptCaption: React.FC<{
+  subtitles?: { text: string; start: number; end: number }[];
   words: WordTimestamp[];
   highlight: string;
   fps: number;
-}> = ({ words, highlight, fps }) => {
+}> = ({ subtitles, words, highlight, fps }) => {
   const frame = useCurrentFrame();
   const { width } = useVideoConfig();
   const t = frame / fps;
 
-  const phrases = React.useMemo(() => buildPhrases(words), [words]);
+  // 1순위: 스크립트 원본 문장 (STT 오류 원천 차단)
+  if (subtitles?.length) {
+    const activeSub = subtitles.find((s) => t >= s.start - 0.05 && t <= s.end + 0.2);
+    if (!activeSub) return null;
+
+    const fontSize = Math.round(width * 0.0165);
+    const local = (t - activeSub.start) * fps;
+    const fade = interpolate(local, [0, 8], [0.3, 1], { extrapolateRight: 'clamp' });
+    const yRise = interpolate(local, [0, 8], [8, 0], { extrapolateRight: 'clamp' });
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          bottom: Math.round(width * 0.026),
+          left: 0,
+          right: 0,
+          display: 'flex',
+          justifyContent: 'center',
+          padding: `0 ${Math.round(width * 0.05)}px`,
+          pointerEvents: 'none',
+          opacity: fade,
+          transform: `translateY(${yRise}px)`,
+        }}
+      >
+        <div
+          style={{
+            background: 'rgba(11, 18, 32, 0.90)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(255, 214, 10, 0.4)',
+            borderBottom: '2.5px solid #FFD60A',
+            borderRadius: Math.round(width * 0.006),
+            padding: `${Math.round(width * 0.0055)}px ${Math.round(width * 0.018)}px`,
+            boxShadow: '0 8px 36px rgba(0,0,0,0.85)',
+            maxWidth: '82%',
+            textAlign: 'center',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'Apple SD Gothic Neo, Pretendard, sans-serif',
+              fontSize,
+              fontWeight: 800,
+              color: '#FFFFFF',
+              lineHeight: 1.48,
+              letterSpacing: -0.6,
+              wordBreak: 'keep-all',
+              textShadow: '0 2px 14px rgba(0,0,0,0.95)',
+            }}
+          >
+            {activeSub.text}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // 2순위 폴백: 단어 단위 자막
+  const phrases = buildPhrases(words);
   const active = phrases.find((p) => t >= p.start - 0.05 && t <= p.end + 0.25);
   if (!active) return null;
 
@@ -552,6 +613,7 @@ const StockVideo: React.FC<{ items: VideoItem[] }> = ({ items }) => {
             ticker={item.ticker}
             contact={contact}
             investorInsight={item.investorInsight}
+            annotations={item.annotations}
           />
           )
         ) : (
@@ -582,8 +644,8 @@ const StockVideo: React.FC<{ items: VideoItem[] }> = ({ items }) => {
 
           </>
         )}
-        {/* 장면 모드에서도 내레이션 자막을 유지한다. */}
-        <CinematicCaption words={words} highlight={current} fps={fps} />
+        {/* 장면 모드에서도 내레이션 자막을 유지한다 (스크립트 100% 매칭). */}
+        <ScriptCaption subtitles={item.subtitles} words={words} highlight={current} fps={fps} />
 
         <InfoBar
           name={item.script?.name ?? item.name}
@@ -636,38 +698,38 @@ const SceneView: React.FC<{
   ticker: string;
   contact: { channel?: string; url?: string; note?: string };
   investorInsight?: InvestorInsight;
-}> = ({ scenes, supply, series, name, ticker, contact, investorInsight }) => {
+  annotations?: ChartAnnotation[];
+}> = ({ scenes, supply, series, name, ticker, contact, investorInsight, annotations }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames, width, height } = useVideoConfig();
   const t = frame / fps;
 
   const scene = sceneAt(scenes, t);
   if (!scene) return null;
   const local = frame - scene.from * fps;
 
-  if (scene.id === 'wisdom' && investorInsight && investorProfiles.some(p => p.id === investorInsight.id)) {
-    return <>
-      <SceneWipe local={local} />
-      <SceneHeadline scene={scene} local={local}/>
-      <InvestorInsightScene insight={investorInsight} local={local}/>
-    </>;
-  }
 
   // 마지막 장면은 마무리 카드 (차트 없음)
   const isClosing = scene.id === 'outro';
 
-  // 차트 종류 매핑 — supply 씬만 수급 차트, 나머지는 기존 SVG 차트
+  // 차트 종류 매핑 — supply 씬만 수급 차트, levels/price 는 캔들 가격 차트, 나머지는 trend/momentum
+  const chartKind: ChartKind =
+    scene.chart === 'trend'
+      ? 'trend'
+      : scene.chart === 'momentum'
+      ? 'momentum'
+      : scene.chart === 'levels' || scene.chart === 'price'
+      ? 'price'
+      : 'return';
+
   const draw: React.FC<{ progress: number }> | null = (() => {
     if (isClosing) return null;
     if (scene.chart === 'supply' && supply) {
       return ({ progress }) => <SupplyChart supply={supply} progress={progress} />;
     }
     if (scene.chart === 'closing') return null;
-    const kind: ChartKind =
-      scene.chart === 'trend' ? 'trend' : scene.chart === 'momentum' ? 'momentum'
-      : scene.chart === 'price' ? 'price' : 'return';
     if (!series) return null;
-    const Comp = CHART_COMPONENTS[kind];
+    const Comp = CHART_COMPONENTS[chartKind];
     return ({ progress }) => <Comp series={series} name={name} ticker={ticker} progress={progress} />;
   })();
 
@@ -675,6 +737,14 @@ const SceneView: React.FC<{
   const fadeOut = interpolate(t, [scene.to - 0.8, scene.to], [1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
+  });
+
+  // 동적 카메라 줌인/줌아웃 계산 (포커스 박스/포인터 설명 시 부드러운 줌인, 전체 국면 줌아웃)
+  const camera = useChartCamera({
+    t,
+    annotations,
+    series,
+    chartKind,
   });
 
   return (
@@ -686,11 +756,44 @@ const SceneView: React.FC<{
         <>
           <SceneHeadline scene={scene} local={local} />
           {draw ? (
-            <div style={{ position: 'absolute', inset: 0, opacity: fadeOut }}>
-              {React.createElement(draw, {
-                progress: Math.min(1, Math.max(0, local / (fps * CHART_DRAW_SECONDS))),
-              })}
-            </div>
+            <ScaleLayer>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 140,
+                  height: 795,
+                  overflow: 'hidden',
+                  opacity: fadeOut,
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: -140,
+                    width: 1920,
+                    height: 1080,
+                    transformOrigin: '0 0',
+                    transform: `translate(${camera.tx}px, ${camera.ty}px) scale(${camera.scale})`,
+                    willChange: 'transform',
+                  }}
+                >
+                  {React.createElement(draw, {
+                    progress: Math.min(1, Math.max(0, local / (fps * CHART_DRAW_SECONDS))),
+                  })}
+                  {/* 차트 포인터, 박스, 지지/저항선 레이어 */}
+                  <ChartAnnotationLayer
+                    annotations={annotations}
+                    series={series}
+                    chartKind={chartKind}
+                    t={t}
+                    cameraScale={camera.scale}
+                  />
+                </div>
+              </div>
+            </ScaleLayer>
           ) : null}
           <SceneStats stats={scene.stats} local={local} />
           <PulseGlow local={local} tone={scene.stats?.[0]?.tone} />

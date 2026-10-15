@@ -128,6 +128,8 @@ export type VideoItem = {
   changeRate?: string;
   metrics?: MetricPayload[];
   cues?: Cue[];
+  subtitles?: { text: string; start: number; end: number }[];
+  annotations?: import('./components/ChartAnnotationLayer').ChartAnnotation[];
 };
 
 export type VideoProps = {

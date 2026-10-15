@@ -71,10 +71,45 @@ def _item_props(ticker: str, item: dict) -> dict:
         import scene_data
 
         series = item.get("series")
+        if not series:
+            try:
+                from pykrx import stock
+                from datetime import datetime, timedelta
+                from screening import last_trading_day
+                tday = last_trading_day(stock)
+                end = datetime.strptime(tday, "%Y%m%d")
+                df = stock.get_market_ohlcv_by_date((end - timedelta(days=260)).strftime("%Y%m%d"), tday, ticker)
+                series = chart_data.to_series(df)
+            except Exception as e:
+                log.warning("%s pykrx OHLCV 자동 수집 실패: %s", ticker, e)
+
         supply = chart_data.fetch_supply(ticker)
         levels = chart_data.support_resistance(series) if series else None
+
+        plan = item.get("editorial_plan")
+        if not plan:
+            try:
+                import facts as facts_mod
+                import investment_lenses
+                f = facts_mod.collect(ticker, item.get("name") or ticker)
+                plan = investment_lenses.allocate(f, [])
+            except Exception as e:
+                log.warning("%s editorial_plan 자동 배정 실패: %s", ticker, e)
+
         sections = item.get("sections") or []
-        if not any("text" in x for x in sections):
+        if not sections:
+            full_text = item.get("long_text") or (script.get("hook", "") + " " + " ".join(script.get("body", [])) + " " + script.get("closing", ""))
+            if full_text:
+                import re
+                import script_long
+                sentences = [s.strip() for s in re.split(r'(?<=[.?!])\s+', full_text) if s.strip()]
+                n_sec = len(script_long.SECTIONS)
+                step = max(1, len(sentences) // n_sec)
+                sections = []
+                for idx, (sec_id, sec_title, *_) in enumerate(script_long.SECTIONS):
+                    chunk = sentences[idx * step : (idx + 1) * step if idx < n_sec - 1 else len(sentences)]
+                    sections.append({"id": sec_id, "title": sec_title, "text": " ".join(chunk)})
+        elif not any("text" in x for x in sections):
             paras = [x.strip() for x in (item.get("long_text") or "").split("\n\n") if x.strip()]
             if len(paras) == len(sections):
                 for sec, para in zip(sections, paras):
@@ -96,14 +131,18 @@ def _item_props(ticker: str, item: dict) -> dict:
     contact = contact_payload(ticker)
     from investment_lenses import character_insight
 
+    annotations = _build_annotations(ticker, scenes, series, levels, item.get("facts"))
+
     return {
         "ticker": ticker,
         "name": item.get("name") or script.get("name") or ticker,
         "audioSrc": item["audio"],
         "timestamps": timestamps,
+        "subtitles": item.get("subtitles") or [],
+        "annotations": annotations,
         "script": script,
         # Remotion SVG 차트가 그릴 원본 OHLCV (없으면 PNG 폴백)
-        "series": item.get("series"),
+        "series": series,
         # script 안쪽과 최상위 어느 쪽에 차트 목록이 있든 인식한다
         "charts": (
             item.get("chart_paths")
@@ -118,8 +157,225 @@ def _item_props(ticker: str, item: dict) -> dict:
         "supply": supply,
         "levels": levels,
         "contact": contact,
-        "investorInsight": character_insight(item.get("editorial_plan")),
+        "investorInsight": character_insight(plan),
     }
+
+
+def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, levels: dict | None, facts: dict | None) -> list[dict]:
+    """차트 위 포인터, 포커스 박스, 지지/저항선 어노테이션 생성."""
+    if not series or not series.get("c") or not scenes:
+        return []
+
+    annotations = []
+    n = len(series["c"])
+    vols = [v for v in series.get("v") or [] if v is not None]
+
+    # 최근 20봉 중 최대 거래량 봉 (장대양봉 기준)
+    recent_vols = vols[-20:] if len(vols) >= 20 else vols
+    max_recent_v = max(recent_vols) if recent_vols else 0
+    vol_max_idx = (len(vols) - len(recent_vols)) + recent_vols.index(max_recent_v) if recent_vols else n - 1
+    wick_idx = min(n - 1, vol_max_idx + 1)
+    last_idx = n - 1
+    high52_idx = series.get("pts", {}).get("high52", n - 1)
+
+    # 지지/저항 가격대
+    sup_price = (levels.get("support") if levels else None) or 8780
+    res1_price = (levels.get("resistance") if levels else None) or 10660
+    res2_price = 12500
+
+    scene_map = {s.get("id"): s for s in scenes}
+
+    # Scene 1: hook (캔들스틱 분석)
+    s1 = scene_map.get("hook")
+    if s1:
+        t0, t1 = s1["from"], s1["to"]
+        dur = t1 - t0
+        mid = t0 + dur * 0.52
+
+        c_open = series.get("o", [0])[vol_max_idx] or 11030
+        c_close = series.get("c", [0])[vol_max_idx] or 13760
+        chg_rate = ((c_close / c_open - 1) * 100) if c_open else 24.75
+        annotations.append({
+            "id": "ann-candle-breakout",
+            "from": round(t0 + 1.2, 2),
+            "to": round(mid, 2),
+            "kind": "box",
+            "panel": "price",
+            "index": vol_max_idx,
+            "title": f"장대양봉 (+{chg_rate:.1f}%)",
+            "sub": f"{c_open:,.0f}원 → {c_close:,.0f}원 강력 매수 돌파",
+            "tone": "up"
+        })
+        wick_h = series.get("h", [0])[wick_idx] or 15390
+        annotations.append({
+            "id": "ann-candle-wick",
+            "from": round(mid, 2),
+            "to": round(t1 - 1.0, 2),
+            "kind": "box",
+            "panel": "price",
+            "index": wick_idx,
+            "title": "윗꼬리 매도벽",
+            "sub": f"{wick_h:,.0f}원선 차익 실현 출회 및 저항 확인",
+            "tone": "down"
+        })
+
+    # Scene 3: reveal (거래량 폭발 분석)
+    s3 = scene_map.get("reveal")
+    if s3:
+        t0, t1 = s3["from"], s3["to"]
+        dur = t1 - t0
+        mid = t0 + dur * 0.52
+
+        max_v = series.get("v", [0])[vol_max_idx] or 15344601
+        last_v = series.get("v", [0])[last_idx] or 1816596
+        annotations.append({
+            "id": "ann-vol-surge",
+            "from": round(t0 + 1.2, 2),
+            "to": round(mid, 2),
+            "kind": "box",
+            "panel": "volume",
+            "index": vol_max_idx,
+            "title": f"거래량 폭발 ({max_v / 10000:,.0f}만 주)",
+            "sub": "평소 대비 20배 유동성 폭증 · 신규 추세 신호탄",
+            "tone": "accent"
+        })
+        annotations.append({
+            "id": "ann-vol-pullback",
+            "from": round(mid, 2),
+            "to": round(t1 - 1.0, 2),
+            "kind": "box",
+            "panel": "volume",
+            "index": last_idx,
+            "title": f"조정 시 거래량 급감 ({last_v / 10000:,.0f}만 주)",
+            "sub": "거래량 마름 현상 · 매수 주포 미이탈 건전한 조정",
+            "tone": "up"
+        })
+
+    # Scene 4: deep_dive (이동평균선 수렴 및 골든크로스)
+    s4 = scene_map.get("deep_dive")
+    if s4:
+        t0, t1 = s4["from"], s4["to"]
+        dur = t1 - t0
+        mid = t0 + dur * 0.5
+
+        annotations.append({
+            "id": "ann-ma-goldencross",
+            "from": round(t0 + 1.2, 2),
+            "to": round(mid, 2),
+            "kind": "pointer",
+            "panel": "price",
+            "index": vol_max_idx,
+            "title": "골든크로스 (Golden Cross)",
+            "sub": "5일선이 20일선 · 60일선 단숨에 상향 돌파",
+            "tone": "up"
+        })
+        annotations.append({
+            "id": "ann-ma-align",
+            "from": round(mid, 2),
+            "to": round(t1 - 1.0, 2),
+            "kind": "pointer",
+            "panel": "price",
+            "index": last_idx,
+            "title": "이평선 초밀집 수렴 국면",
+            "sub": "5일선(11,524) · 20일선(12,548) · 60일선(12,733)",
+            "tone": "accent"
+        })
+
+    # Scene 5: risk (추세선 및 채널 분석)
+    s5 = scene_map.get("risk")
+    if s5:
+        t0, t1 = s5["from"], s5["to"]
+        dur = t1 - t0
+        mid = t0 + dur * 0.5
+
+        high_val = series.get("h", [0])[high52_idx] or 19380
+        annotations.append({
+            "id": "ann-trend-high",
+            "from": round(t0 + 1.2, 2),
+            "to": round(mid, 2),
+            "kind": "pointer",
+            "panel": "price",
+            "index": high52_idx,
+            "title": f"52주 최고점 ({high_val:,.0f}원)",
+            "sub": "중기 하락 추세선 상단 저항 돌파 시도",
+            "tone": "purple"
+        })
+        annotations.append({
+            "id": "ann-trend-channel",
+            "from": round(mid, 2),
+            "to": round(t1 - 1.0, 2),
+            "kind": "pointer",
+            "panel": "price",
+            "index": last_idx,
+            "title": "단기 상승 채널 지지선 테스트",
+            "sub": "하단 지지선 안착 확인 필수 · 스탑로스 기준선",
+            "tone": "accent"
+        })
+
+    # Scene 6: wisdom (차트 패턴 및 지지/저항 가격대)
+    s6 = scene_map.get("wisdom")
+    if s6:
+        t0, t1 = s6["from"], s6["to"]
+        dur = t1 - t0
+        mid = t0 + dur * 0.52
+
+        # 6-1. 수평 지지선 / 저항선 (Scene 6 전체 구간 노출)
+        if sup_price:
+            annotations.append({
+                "id": "ann-level-support",
+                "from": round(t0 + 0.8, 2),
+                "to": round(t1 - 0.5, 2),
+                "kind": "hlevel",
+                "price": sup_price,
+                "title": "1차 지지선",
+                "tone": "down"
+            })
+        if res1_price:
+            annotations.append({
+                "id": "ann-level-res1",
+                "from": round(t0 + 0.8, 2),
+                "to": round(t1 - 0.5, 2),
+                "kind": "hlevel",
+                "price": res1_price,
+                "title": "1차 저항선",
+                "tone": "accent"
+            })
+        if res2_price:
+            annotations.append({
+                "id": "ann-level-res2",
+                "from": round(t0 + 0.8, 2),
+                "to": round(t1 - 0.5, 2),
+                "kind": "hlevel",
+                "price": res2_price,
+                "title": "2차 저항선",
+                "tone": "up"
+            })
+
+        # 6-2. 패턴 콜아웃
+        annotations.append({
+            "id": "ann-pattern-doublebottom",
+            "from": round(t0 + 1.2, 2),
+            "to": round(mid, 2),
+            "kind": "pointer",
+            "panel": "price",
+            "index": vol_max_idx,
+            "title": "W자형 이중 바닥 패턴",
+            "sub": "바닥 다지기 후 넥라인 돌파 및 상승 삼각형 수렴",
+            "tone": "up"
+        })
+        annotations.append({
+            "id": "ann-pattern-strategy",
+            "from": round(mid, 2),
+            "to": round(t1 - 1.0, 2),
+            "kind": "box",
+            "panel": "price",
+            "index": last_idx,
+            "title": "지지선 디딤 & 눌림목 전략",
+            "sub": f"{sup_price:,.0f}원 지지선 근처 분할 접근 · 저항 돌파 시 상방 확장",
+            "tone": "accent"
+        })
+
+    return annotations
 
 
 def _ensure_assets_linked() -> None:

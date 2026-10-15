@@ -36,14 +36,13 @@ export const VB = { w: 1920, h: 1080 } as const;
  * 차트 안에서 제목을 또 그리지 않는다 — 헤드라인은 장면이 이미 말하고 있다.
  */
 export const PAD = {
-  left: 128,
-  right: 156, // 우측 가격 태그
-  top: 330,
-  // 아래 여백은 SceneStats 행(906~1000) 이 차지한다. 날짜 축 라벨이 그 위로 올라오면 겹친다.
-  bottom: 252,
+  left: 90,
+  right: 170, // 우측 가격 축 배지 및 수평선 태그 안전 마진 확보
+  top: 175,   // 상단 헤드라인 바로 아래 (140px 뷰포트 시작, 175px 챠트 패널 시작)
+  bottom: 150, // 하단 자막(970px) 위 (930px 챠트 패널 종료 — 높이 755px 극대화)
   gap: 16,
-  statsY: 936,
-  dateLabelY: 866,
+  statsY: 38,
+  dateLabelY: 915,
 } as const;
 
 export type Rect = { x: number; y: number; w: number; h: number };

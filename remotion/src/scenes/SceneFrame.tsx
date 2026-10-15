@@ -59,52 +59,52 @@ export const SceneHeadline: React.FC<{
       <div
         style={{
           position: 'absolute',
-          left: 128,
-          right: 156,
-          top: 142,
+          left: 90,
+          right: 120,
+          top: 36,
           fontFamily: FONT,
           opacity: fade,
           transform: `translateY(${rise}px)`,
         }}
       >
       {/* eyebrow — accent rule 하나가 앵커 역할 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div style={{ width: 64, height: 3, background: '#FFD60A', borderRadius: 2 }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ width: 44, height: 3, background: '#FFD60A', borderRadius: 2 }} />
         <div
           style={{
             color: '#8FA3C8',
-            fontSize: 26,
+            fontSize: 22,
             fontWeight: 700,
             letterSpacing: 1.2,
           }}
         >
           POINT {scene.point}
-          <span style={{ color: '#3A4C74', margin: '0 14px' }}>|</span>
+          <span style={{ color: '#3A4C74', margin: '0 12px' }}>|</span>
           <span style={{ color: '#C7D3EA' }}>{scene.eyebrow}</span>
         </div>
       </div>
 
-      {/* 헤드라인 — 화면이 말할 한 문장 */}
+      {/* 헤드라인 — 화면이 말할 한 문장 (컴팩트 고화질 방송 타이포그래피) */}
       <div
         style={{
           position: 'relative',
-          marginTop: 22,
+          marginTop: 10,
           color: '#FFFFFF',
-          fontSize: 74,
+          fontSize: 48,
           fontWeight: 800,
-          lineHeight: 1.16,
-          letterSpacing: -2.2,
+          lineHeight: 1.15,
+          letterSpacing: -1.6,
           textShadow: '0 6px 32px rgba(0,0,0,0.55)',
-          maxWidth: '86%',
+          maxWidth: '58%',
           overflow: 'hidden',
         }}
       >
         {scene.headline}
-        <LightSweep width={1500} height={200} delay={6} duration={54} />
+        <LightSweep width={1100} height={160} delay={6} duration={54} />
       </div>
 
       {scene.sub ? (
-        <div style={{ marginTop: 16, color: '#8FA3C8', fontSize: 28, fontWeight: 600, letterSpacing: -0.4 }}>
+        <div style={{ marginTop: 8, color: '#8FA3C8', fontSize: 22, fontWeight: 600, letterSpacing: -0.4, maxWidth: '58%' }}>
           {scene.sub}
         </div>
       ) : null}
@@ -113,7 +113,7 @@ export const SceneHeadline: React.FC<{
   );
 };
 
-/** 핵심 수치 — 박스 없이 나열만 한다. 라벨은 위, 값은 아래. */
+/** 핵심 수치 — 상단 우측 방송 브로드캐스트 위젯 형태로 배치 (자막/챠트 간섭 원천 배제) */
 export const SceneStats: React.FC<{ stats?: SceneStat[]; local: number }> = ({
   stats,
   local,
@@ -129,33 +129,33 @@ export const SceneStats: React.FC<{ stats?: SceneStat[]; local: number }> = ({
       <div
         style={{
           position: 'absolute',
-          left: 128,
-          right: 156,
-          top: 906,
+          right: 140,
+          top: 38,
           display: 'flex',
-          gap: 92,
+          gap: 36,
           fontFamily: FONT,
           opacity: fade,
+          zIndex: 30,
         }}
       >
         {stats.map((s) => (
-          <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ color: '#6B7FA3', fontSize: 22, fontWeight: 700, letterSpacing: 0.4 }}>
+          <div key={s.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <div style={{ color: '#8FA3C8', fontSize: 16, fontWeight: 700, letterSpacing: 0.4 }}>
               {s.label}
             </div>
             <div
               style={{
                 position: 'relative',
                 color: TONE[s.tone ?? 'flat'],
-                fontSize: 46,
+                fontSize: 32,
                 fontWeight: 800,
                 fontFamily: MONO,
-                letterSpacing: -1.4,
-                textShadow: `0 0 26px ${TONE[s.tone ?? 'flat']}38`,
+                letterSpacing: -1.0,
+                textShadow: `0 0 20px ${TONE[s.tone ?? 'flat']}38`,
               }}
             >
               <CountUp value={s.value} local={local} />
-              <LightSweep width={420} height={70} delay={10} />
+              <LightSweep width={240} height={50} delay={10} />
             </div>
           </div>
         ))}
