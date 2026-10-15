@@ -458,3 +458,95 @@ def match_surge_news(ticker: str, surge_date: str, news_list: Optional[List[Dict
         matched_news = news_list[0]
 
     return matched_news
+
+
+# ─────────────────────────────────────────────────────────────
+# 7. 기업 재무제표 수집 (연간/분기 F-Score, M-Score, 해자 분석용)
+# ─────────────────────────────────────────────────────────────
+
+
+def fetch_finance_naver(ticker: str, period_type: str = "annual") -> Dict[str, Any]:
+    """네이버 증권 기업 재무제표 API 수집 (연간 또는 분기).
+
+    반환 정보:
+        {
+            "periods": ["202312", "202412", "202512"],
+            "metrics": {
+                "매출액": {"202312": 2589355.0, ...},
+                "영업이익": {...},
+                "당기순이익": {...},
+                "ROE": {...},
+                "부채비율": {...},
+                "당좌비율": {...},
+                "유보율": {...},
+                "EPS": {...},
+                "BPS": {...},
+            }
+        }
+    """
+    mode = "quarter" if period_type == "quarter" else "annual"
+    url = f"https://m.stock.naver.com/api/stock/{ticker}/finance/{mode}"
+    data = _request_json(url) or {}
+
+    fi = data.get("financeInfo") or {}
+    tr_list = fi.get("trTitleList") or []
+    row_list = fi.get("rowList") or []
+
+    # 확정 실적 기간 키 목록 (컨센서스 제외 우선)
+    periods = [t.get("key") for t in tr_list if t.get("key")]
+
+    metrics_map: Dict[str, Dict[str, Optional[float]]] = {}
+    for row in row_list:
+        title = row.get("title", "").strip()
+        cols = row.get("columns", {})
+        val_dict: Dict[str, Optional[float]] = {}
+        for p_key in periods:
+            c_info = cols.get(p_key) or {}
+            raw_v = c_info.get("value")
+            if raw_v and raw_v != "-":
+                try:
+                    val_dict[p_key] = float(str(raw_v).replace(",", ""))
+                except (ValueError, TypeError):
+                    val_dict[p_key] = None
+            else:
+                val_dict[p_key] = None
+        metrics_map[title] = val_dict
+
+    return {
+        "ticker": ticker,
+        "periods": periods,
+        "metrics": metrics_map,
+        "summary": data.get("corporationSummary", ""),
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# 8. 시장 지수 시세 수집 (하워드 막스 시장 사이클 및 이격도 분석용)
+# ─────────────────────────────────────────────────────────────
+
+
+def fetch_market_index(index_symbol: str = "KOSPI", count: int = 60) -> List[Dict[str, Any]]:
+    """네이버 증권 시장 지수(KOSPI / KOSDAQ) 일별 시세 수집.
+
+    반환:
+        [{"date": "2026-10-15", "close": 2554.22, "change_rate": -1.2, "open": ..., "high": ..., "low": ...}, ...]
+    """
+    sym = index_symbol.upper()
+    url = f"https://m.stock.naver.com/api/index/{sym}/price?page=1&pageSize={count}"
+    data = _request_json(url) or []
+
+    results = []
+    if isinstance(data, list):
+        for item in data:
+            dt = item.get("localTradedAt", "")
+            c_raw = str(item.get("closePrice", "0")).replace(",", "")
+            diff_raw = str(item.get("fluctuationsRatio", "0")).replace(",", "")
+            try:
+                results.append({
+                    "date": dt,
+                    "close": float(c_raw),
+                    "change_rate": float(diff_raw),
+                })
+            except Exception:
+                continue
+    return results

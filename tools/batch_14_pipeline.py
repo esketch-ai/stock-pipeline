@@ -124,6 +124,15 @@ def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
     matched_n = naver_finance.match_surge_news(ticker, surge_date)
     surge_news_title = matched_n.get("title") if matched_n else ""
 
+    # 자본 보존형(Capital Preservation) 평가 결합
+    import capital_preservation
+    cp_eval = capital_preservation.evaluate_capital_preservation(
+        ticker=ticker,
+        name=name,
+        series=series,
+        levels=levels,
+    )
+
     return {
         "ticker": ticker,
         "name": name,
@@ -154,6 +163,10 @@ def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
         "poc_pct": vp.get("poc_pct", 15.0),
         "is_above_poc": vp.get("is_above_poc", True),
         "surge_news": surge_news_title,
+        "f_score": cp_eval["step1_moat"]["f_score"],
+        "rr_ratio": cp_eval["step4_trade"]["rr_ratio"],
+        "safety_status": cp_eval["step3_safety"]["status"],
+        "shares_to_buy": cp_eval["step4_trade"]["shares_to_buy"],
     }
 
 
@@ -162,12 +175,15 @@ def generate_7min_script(m: dict[str, Any]) -> list[dict[str, str]]:
     name = m["name"]
     ticker = m["ticker"]
 
-    # 0. Selection (종목 선정 배경 및 이유)
+    # 0. Selection (종목 선정 배경 및 자본 보존형 분석)
+    f_score_val = m.get("f_score", 7)
+    rr_val = m.get("rr_ratio", 2.5)
     sec0_text = (
-        f"오늘 주차뿌까에서 긴급 타격 분석 종목으로 {name}을 선정한 데에는 시장의 이목을 집중시키는 명확한 기술적 이유가 있습니다. "
-        f"최근 시장의 불확실한 변동성 속에서도 {name}은 {m['max_vol'] / 10000:,.0f}만 주라는 평소 대비 {m['vol_multiple']}배에 달하는 기록적인 거래량을 터뜨리며 바닥 탈출 시그널을 강력하게 발산했습니다. "
-        f"특히 주가가 하방 지지력을 확보한 뒤 단기 이동평균선이 중장기 이평선을 뚫어내는 골든크로스를 형성하며 {m['chg_rate']:+.1f}%의 강한 추세 전환 변곡점을 만들어냈기 때문입니다. "
-        f"과연 지금의 움직임이 강력한 2차 상승 랠리를 향한 출발점일지, 아니면 차익 실현 매물벽에 가로막힐 단기 반등에 불과할지, 캔들부터 수급, 거래량, 추세까지 5대 핵심 지표로 샅샅이 파헤쳐보겠습니다."
+        f"오늘 주차뿌까에서 긴급 타격 분석 종목으로 {name}을 선정한 데에는 워런 버핏의 제1원칙인 '절대로 돈을 잃지 마라'에 기반한 엄격한 방어적 이유가 있습니다. "
+        f"첫째, {name}은 피오트로스키 F-Score {f_score_val}점을 기록하며 회계적 건전성과 이익 창출력을 입증했습니다. "
+        f"둘째, 최근 시장의 변동성 속에서도 평소 대비 {m['vol_multiple']}배에 달하는 {m['max_vol'] / 10000:,.0f}만 주의 기록적인 거래량이 터지며 바닥 탈출 시그널을 강력하게 발산했습니다. "
+        f"셋째, 폴 튜더 존스의 원칙처럼 스윙 로우 {m['sup']:,}원을 확고한 손절선으로 삼고, 상단 1차 저항선까지 {rr_val}:1 수준의 비대칭 손익비가 확보되었기 때문입니다. "
+        f"과연 지금의 자리가 장기 복리를 지켜낼 결정적 변곡점일지, 캔들부터 수급, 거래량, 추세까지 5대 핵심 지표로 샅샅이 파헤쳐보겠습니다."
     )
 
     # 1. Hook (캔들스틱 분석)
