@@ -73,12 +73,13 @@ def save_progress(progress: dict) -> None:
 
 
 def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
-    """실측 기술적 지표 및 수급 데이터 집계."""
-    end_date = datetime.now().strftime("%Y%m%d")
-    start_date = (datetime.now() - timedelta(days=280)).strftime("%Y%m%d")
-
-    df = stock.get_market_ohlcv_by_date(start_date, end_date, ticker)
-    series = chart_data.to_series(df)
+    """실측 기술적 지표 및 수급 데이터 집계 (네이버 증권 서비스 우선 연동)."""
+    series = chart_data.fetch_series_naver(ticker)
+    if not series or not series.get("c"):
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=280)).strftime("%Y%m%d")
+        df = stock.get_market_ohlcv_by_date(start_date, end_date, ticker)
+        series = chart_data.to_series(df)
     if not series or not series.get("c"):
         raise ValueError(f"{ticker} OHLCV 데이터를 불러올 수 없습니다.")
 
@@ -89,8 +90,11 @@ def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
     last_idx = n - 1
     last_close = int(series["c"][last_idx])
     first_close = int(series["c"][0])
-    high52 = int(max(series["h"]))
-    low52 = int(min(series["l"]))
+
+    valid_highs = [x for x in series.get("h") or [] if x and x > 0]
+    valid_lows = [x for x in series.get("l") or [] if x and x > 0]
+    high52 = int(max(valid_highs)) if valid_highs else last_close
+    low52 = int(min(valid_lows)) if valid_lows else last_close
 
     ma5 = int(series["ma5"][-1]) if series.get("ma5") and series["ma5"][-1] else last_close
     ma20 = int(series["ma20"][-1]) if series.get("ma20") and series["ma20"][-1] else last_close
@@ -165,8 +169,11 @@ def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
         "surge_news": surge_news_title,
         "f_score": cp_eval["step1_moat"]["f_score"],
         "rr_ratio": cp_eval["step4_trade"]["rr_ratio"],
+        "margin_of_safety_pct": cp_eval["step3_safety"]["margin_of_safety_pct"],
         "safety_status": cp_eval["step3_safety"]["status"],
         "shares_to_buy": cp_eval["step4_trade"]["shares_to_buy"],
+        "disparity_20": cp_eval["step2_market"]["disparity_20"],
+        "cash_allocation_pct": cp_eval["step2_market"]["cash_allocation_pct"],
     }
 
 
@@ -178,11 +185,13 @@ def generate_7min_script(m: dict[str, Any]) -> list[dict[str, str]]:
     # 0. Selection (종목 선정 배경 및 자본 보존형 분석)
     f_score_val = m.get("f_score", 7)
     rr_val = m.get("rr_ratio", 2.5)
+    safety_margin_val = m.get("margin_of_safety_pct", 46.9)
     sec0_text = (
-        f"오늘 주차뿌까에서 긴급 타격 분석 종목으로 {name}을 선정한 데에는 워런 버핏의 제1원칙인 '절대로 돈을 잃지 마라'에 기반한 엄격한 방어적 이유가 있습니다. "
-        f"첫째, {name}은 피오트로스키 F-Score {f_score_val}점을 기록하며 회계적 건전성과 이익 창출력을 입증했습니다. "
-        f"둘째, 최근 시장의 변동성 속에서도 평소 대비 {m['vol_multiple']}배에 달하는 {m['max_vol'] / 10000:,.0f}만 주의 기록적인 거래량이 터지며 바닥 탈출 시그널을 강력하게 발산했습니다. "
-        f"셋째, 폴 튜더 존스의 원칙처럼 스윙 로우 {m['sup']:,}원을 확고한 손절선으로 삼고, 상단 1차 저항선까지 {rr_val}:1 수준의 비대칭 손익비가 확보되었기 때문입니다. "
+        f"오늘 주차뿌까에서 긴급 타격 분석 종목으로 {name}을 선정한 데에는 워런 버핏의 제1원칙인 '절대로 돈을 잃지 마라'에 기반한 4단계 자본 보존형 방어 시스템의 엄격한 검증을 통과했기 때문입니다. "
+        f"첫째, {name}은 피오트로스키 F-Score {f_score_val}점을 기록하며 탄탄한 회계적 건전성과 현금 창출력을 입증했습니다. "
+        f"둘째, 세스 클라만의 안전마진 원칙에 따라 보수적 청산가치 대비 {m.get('safety_status', f'안전마진 {safety_margin_val:+.1f}%')}라는 확고한 하방 안전판을 갖추고 있습니다. "
+        f"셋째, 최근 바닥권에서 평소 거래량 대비 {m['vol_multiple']}배에 달하는 {m['max_vol'] / 10000:,.0f}만 주의 기록적인 거래량이 폭발하며 네이버 증권 최대 매물대 POC 벽을 강하게 돌파했습니다. "
+        f"넷째, 폴 튜더 존스의 원칙대로 스윙 로우 {m['sup']:,}원을 칼손절선으로 고정하고, 1차 저항선까지 {rr_val}:1의 비대칭 손익비가 확보되었습니다. "
         f"과연 지금의 자리가 장기 복리를 지켜낼 결정적 변곡점일지, 캔들부터 수급, 거래량, 추세까지 5대 핵심 지표로 샅샅이 파헤쳐보겠습니다."
     )
 
@@ -273,7 +282,7 @@ def generate_7min_script(m: dict[str, Any]) -> list[dict[str, str]]:
     return sections
 
 
-async def generate_voice_and_timestamps(ticker: str, full_text: str, sections: list[dict]) -> tuple[Path, list[dict], list[dict]]:
+async def generate_voice_and_timestamps(ticker: str, full_text: str, sections: list[dict], force: bool = False) -> tuple[Path, list[dict], list[dict]]:
     """edge-tts ko-KR-InJoonNeural 음성 합성 및 Whisper 단어 타임스탬프 추출."""
     import edge_tts
     import whisper
@@ -283,7 +292,7 @@ async def generate_voice_and_timestamps(ticker: str, full_text: str, sections: l
     voice_path = cache_dir / "voice.mp3"
 
     recreate_voice = True
-    if voice_path.exists():
+    if voice_path.exists() and not force:
         try:
             dur_check = float(subprocess.check_output(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(voice_path)]
@@ -357,12 +366,15 @@ def build_props_and_manifest(m: dict[str, Any], sections: list[dict], voice_path
         "subtitles": subtitles,
         "sections": sections,
         "long_text": "\n\n".join(s["text"] for s in sections),
+        "series": m.get("series"),
+        "levels": m.get("levels"),
+        "supply": m.get("supply"),
         "script": {
             "name": name,
             "ticker": ticker,
             "hook": sections[0]["text"][:120],
-            "body": [s["text"][:120] for s in sections[1:6]],
-            "closing": sections[6]["text"][:120],
+            "body": [s["text"][:120] for s in sections[1:7]],
+            "closing": sections[7]["text"][:120],
             "chart_paths": [],
         },
         "facts": {
@@ -387,10 +399,10 @@ def build_props_and_manifest(m: dict[str, Any], sections: list[dict], voice_path
     return props
 
 
-def run_pipeline_for_ticker(ticker: str, name: str, render_video: bool = True, upload_video: bool = True) -> bool:
+def run_pipeline_for_ticker(ticker: str, name: str, render_video: bool = True, upload_video: bool = True, force: bool = False) -> bool:
     """단일 종목 파이프라인 (대본·음성·자막 → 4K 렌더 → 유튜브 업로드)."""
     log.info("=" * 60)
-    log.info("▶ [%s %s] 7분 풀버전 4K 제작 시작", ticker, name)
+    log.info("▶ [%s %s] 7분 풀버전 4K 제작 시작 (force=%s)", ticker, name, force)
     log.info("=" * 60)
 
     progress = load_progress()
@@ -404,7 +416,7 @@ def run_pipeline_for_ticker(ticker: str, name: str, render_video: bool = True, u
     full_text = "\n\n".join(s["text"] for s in sections)
 
     # 3. 음성 합성 & 타임스탬프
-    voice_path, words, subtitles = asyncio.run(generate_voice_and_timestamps(ticker, full_text, sections))
+    voice_path, words, subtitles = asyncio.run(generate_voice_and_timestamps(ticker, full_text, sections, force=force))
 
     # 4. Props & Manifest 구성
     build_props_and_manifest(m, sections, voice_path, words, subtitles)
@@ -416,7 +428,7 @@ def run_pipeline_for_ticker(ticker: str, name: str, render_video: bool = True, u
     # 5. 4K 렌더 (이미 생성되고 QC 통과한 파일이 있으면 재렌더 생략)
     if render_video:
         needs_render = True
-        if video_path.exists() and video_path.stat().st_size > 100 * 1024 * 1024:
+        if not force and video_path.exists() and video_path.stat().st_size > 100 * 1024 * 1024:
             qc = stage5_publish.probe(video_path)
             if qc.ok:
                 log.info("✔ [%s %s] 이미 렌더링된 4K 비디오 확인 (%s, %.1fMB)", ticker, name, video_path.name, qc.size_mb)
@@ -484,22 +496,30 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="14개 전 종목 7분 4K 영상 제작 및 유튜브 업로드")
     parser.add_argument("--tickers", help="쉼표로 구분한 특정 종목 코드 (기본: 14개 전체)")
     parser.add_argument("--step", choices=["all", "prepare", "render", "upload"], default="all")
+    parser.add_argument("--force", action="store_true", help="음성 및 렌더링 강제 재생성")
+    parser.add_argument("--no-upload", action="store_true", help="유튜브 업로드 생략 (영상 제작까지만)")
     args = parser.parse_args()
 
     target_list = DEFAULT_14_TICKERS
     if args.tickers:
         wanted = [t.strip() for t in args.tickers.split(",") if t.strip()]
-        target_list = [(t, next((n for ct, n in DEFAULT_14_TICKERS if ct == t), t)) for t in wanted]
+        # 종목명 매핑 확장
+        name_dict = {t: n for t, n in DEFAULT_14_TICKERS}
+        name_dict.update({
+            "005930": "삼성전자",
+            "000660": "SK하이닉스",
+        })
+        target_list = [(t, name_dict.get(t, t)) for t in wanted]
 
-    log.info("총 %d개 종목 배치 시작 (step=%s)", len(target_list), args.step)
+    log.info("총 %d개 종목 배치 시작 (step=%s, force=%s, no_upload=%s)", len(target_list), args.step, args.force, args.no_upload)
     render_video = args.step in ["all", "render"]
-    upload_video = args.step in ["all", "upload"]
+    upload_video = args.step in ["all", "upload"] and not args.no_upload
 
     success_count = 0
     for idx, (ticker, name) in enumerate(target_list, 1):
         log.info("\n>>> 전체 진행률: [%d/%d] %s (%s)", idx, len(target_list), name, ticker)
         try:
-            ok = run_pipeline_for_ticker(ticker, name, render_video=render_video, upload_video=upload_video)
+            ok = run_pipeline_for_ticker(ticker, name, render_video=render_video, upload_video=upload_video, force=args.force)
             if ok:
                 success_count += 1
             else:
