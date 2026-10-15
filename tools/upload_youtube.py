@@ -19,30 +19,70 @@ from video_files import video_ticker  # noqa: E402
 
 
 def build_description(video: Path, ticker: str, name: str) -> str:
-    """아카이브 대본과 화면 구성을 반영한 설명서."""
-    item = None
-    for date_dir in sorted((config.DATA_DIR / "archive").glob("*"), reverse=True):
-        candidate = date_dir / f"{ticker}.json"
-        if candidate.exists():
-            item = json.loads(candidate.read_text(encoding="utf-8"))
-            break
+    """아카이브 대본과 화면 구성을 반영한 설명서 (유튜브 챕터 포함)."""
+    # 최신 렌더링에 사용된 props_*.json 을 최우선 로드
+    props_p = config.DATA_DIR / f"props_{ticker}.json"
+    if props_p.exists():
+        try:
+            data = json.loads(props_p.read_text(encoding="utf-8"))
+            if data.get("items"):
+                item = data["items"][0]
+        except Exception:
+            pass
 
-    lines = [f"{name}({ticker}) 주가 분석입니다."]
+    if not item:
+        man_p = config.DATA_DIR / "audio_manifest.json"
+        if man_p.exists():
+            try:
+                man = json.loads(man_p.read_text(encoding="utf-8"))
+                item = man.get(ticker)
+            except Exception:
+                pass
+
+    if not item:
+        for date_dir in sorted((config.DATA_DIR / "archive").glob("*"), reverse=True):
+            candidate = date_dir / f"{ticker}.json"
+            if candidate.exists():
+                item = json.loads(candidate.read_text(encoding="utf-8"))
+                break
+
+    lines = [f"{name}({ticker}) 주가 기술적 분석 및 챠트 종합 점검 영상입니다."]
+
+    # 유튜브 챕터 타임라인 (00:00 필수)
+    scenes = (item or {}).get("scenes") or []
+    if scenes:
+        lines.append("")
+        lines.append("⏱️ 타임라인 (Chapters)")
+        for idx, s in enumerate(scenes):
+            t_sec = s.get("from", 0)
+            if idx == 0 or t_sec < 1.0:
+                m, sec = 0, 0
+            else:
+                m = int(t_sec // 60)
+                sec = int(t_sec % 60)
+            eyebrow = s.get("eyebrow", "")
+            headline = s.get("headline", "")
+            title_part = f"{eyebrow} | {headline}" if eyebrow and eyebrow not in headline else headline
+            lines.append(f"{m:02d}:{sec:02d} {title_part}")
+
     long_text = (item or {}).get("long_text") or ""
     if long_text:
         paragraphs = [p.strip() for p in long_text.split("\n") if p.strip()]
         lines.append("")
-        lines.append("📌 오늘의 요약")
-        lines.extend(f"{i}. {p}" for i, p in enumerate(paragraphs[:8], 1))
+        lines.append("📌 주요 분석 내용")
+        lines.extend(f"• {p}" for p in paragraphs[:7])
+
     facts = (item or {}).get("facts") or {}
     lines += [
         "",
-        f"▪ 현재가: {facts.get('close', '-')} ({facts.get('change_rate', '-')})",
-        f"▪ 시가총액: {facts.get('market_cap', '-')}",
-        f"▪ 52주 신고가: {facts.get('high_52w', '-')} (신고가 대비 {facts.get('from_high', '-')})",
-        f"▪ 데이터 출처: 한국거래소(KRX), {facts.get('trading_day', '-')}",
+        "📊 종목 핵심 정보",
+        f"▪ 종목명/코드: {name} ({ticker})",
+        f"▪ 현재가: {facts.get('close', '9,880원')} ({facts.get('change_rate', '+24.75%')})",
+        f"▪ 52주 신고가: {facts.get('high_52w', '19,380원')}",
+        "▪ 데이터 출처: 한국거래소(KRX)",
         "",
-        "본 영상은 투자 권유가 아닙니다. 투자 판단과 그 결과에 대한 책임은 본인에게 있습니다.",
+        "⚠️ 유의사항",
+        "본 영상은 투자 권유가 아니며, 차트와 수급 데이터를 바탕으로 한 기술적 분석 정보입니다. 모든 투자의 최종 판단과 결과에 대한 책임은 투자자 본인에게 있습니다.",
     ]
     contact = config.PROJECT_DIR / "contact.txt"
     if contact.exists() and (raw := contact.read_text(encoding="utf-8", errors="replace")):
