@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 # 주요 종목별 3대 핵심 투자 포인트 정의 (사전 검증된 전문가 분석)
@@ -160,10 +161,19 @@ def get_highlights(ticker: str, name: str, facts: Dict[str, Any] | None = None) 
 
     # 2. 밸류에이션 (PBR / BPS)
     pbr = f.get("pbr")
-    if pbr and float(pbr) < 1.0:
+    pbr_val = None
+    if pbr is not None:
+        try:
+            m = re.search(r"[\d.]+", str(pbr))
+            if m:
+                pbr_val = float(m.group(0))
+        except (ValueError, TypeError):
+            pass
+
+    if pbr_val is not None and pbr_val < 1.0:
         points.append({
             "icon": "💎",
-            "title": f"PBR {float(pbr):.2f}배 저평가",
+            "title": f"PBR {pbr_val:.2f}배 저평가",
             "desc": "순자산가치 대비 안전마진 확보 구간",
             "tag": "가치분석",
         })

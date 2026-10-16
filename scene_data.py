@@ -52,6 +52,30 @@ def _fmt_pct(v: float | None) -> str:
     return f"{v:+.2f}%"
 
 
+def _safe_int(v: Any, default: int = 0) -> int:
+    if v is None:
+        return default
+    try:
+        cleaned = re.sub(r"[^\d.-]", "", str(v))
+        if not cleaned:
+            return default
+        return int(float(cleaned))
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(v: Any, default: float = 0.0) -> float:
+    if v is None:
+        return default
+    try:
+        cleaned = re.sub(r"[^\d.-]", "", str(v))
+        if not cleaned:
+            return default
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return default
+
+
 # ─────────────────────────────────────────────────────────────
 # 시간 매핑
 # ─────────────────────────────────────────────────────────────
@@ -254,18 +278,18 @@ def _scene_content(*, sid: str = "", chart, name, ticker, facts, series, supply,
     if sid == "selection" or chart == "selection":
         stats = []
         if facts.get("target_price"):
-            stats.append({"label": "목표주가", "value": f"{int(facts['target_price']):,}원", "tone": "up"})
+            stats.append({"label": "목표주가", "value": f"{_safe_int(facts['target_price']):,}원", "tone": "up"})
         elif last_close:
             stats.append({"label": "현재가", "value": _fmt_price(last_close)})
         if facts.get("upside_pct"):
-            stats.append({"label": "상승여력", "value": f"+{float(facts['upside_pct']):.1f}%", "tone": "up"})
+            stats.append({"label": "상승여력", "value": f"+{_safe_float(facts['upside_pct']):.1f}%", "tone": "up"})
         elif chg is not None:
             stats.append({"label": "등락률", "value": _fmt_pct(chg),
                           "tone": "up" if chg >= 0 else "down"})
         if facts.get("foreign_ratio"):
-            stats.append({"label": "외인 지분율", "value": f"{float(facts['foreign_ratio']):.1f}%", "tone": "accent"})
+            stats.append({"label": "외인 지분율", "value": f"{_safe_float(facts['foreign_ratio']):.1f}%", "tone": "accent"})
         elif facts.get("pbr"):
-            stats.append({"label": "PBR", "value": f"{float(facts['pbr']):.2f}배", "tone": "accent"})
+            stats.append({"label": "PBR", "value": f"{_safe_float(facts['pbr']):.2f}배", "tone": "accent"})
         else:
             vr = vol_ratio or _num(facts.get("vol_multiple"))
             if vr:
@@ -303,7 +327,7 @@ def _scene_content(*, sid: str = "", chart, name, ticker, facts, series, supply,
         stats = [
             {"label": "집중 거래량", "value": f"{vr:.1f}배", "tone": "up"},
             {"label": "현재가", "value": _fmt_price(last_close)},
-            {"label": "PBR", "value": f"{float(facts.get('pbr', 0.44)):.2f}배", "tone": "accent"},
+            {"label": "PBR", "value": f"{_safe_float(facts.get('pbr', 0.44)):.2f}배", "tone": "accent"},
         ]
         head = "거래량 집중 유입 및 증권사 리포트 모멘텀"
         sub = "SK·유안타증권 등 건설 및 원전 가치 재평가 보고서 전달"
@@ -343,8 +367,8 @@ def _scene_content(*, sid: str = "", chart, name, ticker, facts, series, supply,
 
     if sid == "outro":
         stats = [
-            {"label": "목표주가", "value": f"{int(facts.get('target_price', 496875)):,}원", "tone": "up"},
-            {"label": "안전마진", "value": f"PBR {float(facts.get('pbr', 0.44)):.2f}배", "tone": "accent"},
+            {"label": "목표주가", "value": f"{_safe_int(facts.get('target_price', 496875)):,}원", "tone": "up"},
+            {"label": "안전마진", "value": f"PBR {_safe_int(facts.get('pbr', 0.44)*100)/100:.2f}배" if isinstance(facts.get('pbr'), (int, float)) else f"PBR {facts.get('pbr', '0.44배')}", "tone": "accent"},
             {"label": "투자의견", "value": "매수 (4.0)", "tone": "up"},
         ]
         head = "전문가 종합 투자 전략 및 밸류에이션 요약"
