@@ -732,9 +732,19 @@ def collect_and_store_full_stock_analytics(ticker: str, name: str) -> Dict[str, 
     ma60_v = series_enriched.get("ma60", [cur_p])[-1] or cur_p
     ma120_v = series_enriched.get("ma120", [cur_p])[-1] or cur_p
 
-    sup_p = levels.get("support") or int(cur_p * 0.96)
-    res_p = levels.get("resistance") or int(cur_p * 1.15)
-    rr_calc = round((res_p - cur_p) / max(1, cur_p - sup_p), 2)
+    raw_sup = levels.get("support")
+    if raw_sup and raw_sup < cur_p:
+        sup_p = int(raw_sup)
+    else:
+        sup_p = int(cur_p * 0.93)
+
+    raw_res = levels.get("resistance")
+    if raw_res and raw_res > cur_p:
+        res_p = int(raw_res)
+    else:
+        res_p = int(cur_p * 1.15)
+
+    rr_calc = round(max(0.1, (res_p - cur_p)) / max(1.0, (cur_p - sup_p)), 2)
 
     cur.execute("""
     INSERT OR REPLACE INTO technical_analytics (

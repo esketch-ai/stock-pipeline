@@ -345,13 +345,35 @@ async def generate_voice_and_timestamps(ticker: str, full_text: str, sections: l
     return voice_path, words, subtitles
 
 
-def build_props_and_manifest(m: dict[str, Any], sections: list[dict], voice_path: Path, words: list[dict], subtitles: list[dict]) -> dict[str, Any]:
-    """props_{ticker}.json 및 audio_manifest.json 갱신."""
+def build_props_and_manifest(m: dict[str, Any], sections: list[dict], voice_path: Path, words: list[dict], subtitles: list[dict], audit_res: Any = None) -> dict[str, Any]:
+    """props_{ticker}.json 및 audio_manifest.json 갱신 (6인 애널리스트 검수 인증서 동봉)."""
     ticker = m["ticker"]
     name = m["name"]
 
     manifest_path = config.DATA_DIR / "audio_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+
+    audit_info = {}
+    if audit_res:
+        audit_info = {
+            "passed": audit_res.passed,
+            "total_score": audit_res.total_score,
+            "summary": audit_res.summary(),
+            "opinions": [
+                {
+                    "name": op.analyst_name,
+                    "title": op.analyst_title,
+                    "region": op.region,
+                    "specialty": op.specialty,
+                    "score": op.score,
+                    "passed": op.passed,
+                    "comment": op.advisory_comment,
+                }
+                for op in audit_res.opinions
+            ]
+        }
+        cert_path = config.DATA_DIR / f"audit_certificate_{ticker}.json"
+        cert_path.write_text(json.dumps(audit_info, ensure_ascii=False, indent=2), encoding="utf-8")
 
     item_meta = {
         "ticker": ticker,
@@ -361,6 +383,7 @@ def build_props_and_manifest(m: dict[str, Any], sections: list[dict], voice_path
         "subtitles": subtitles,
         "sections": sections,
         "long_text": "\n\n".join(s["text"] for s in sections),
+        "audit_board": audit_info,
         "series": m.get("series"),
         "levels": m.get("levels"),
         "supply": m.get("supply"),
@@ -414,13 +437,23 @@ def run_pipeline_for_ticker(ticker: str, name: str, render_video: bool = True, u
 
     # 2. 7구간 대본 작성
     sections = generate_7min_script(m)
+
+    # ★ 6대 국내외 주식 전문 애널리스트 자문 및 검수 위원회(Global & Domestic Audit Board) 필수 검수 게이트
+    import analyst_board_audit
+    audit_res = analyst_board_audit.audit_and_advise_script(ticker, name, m, sections)
+    if not audit_res.passed:
+        log.error("⛔ [%s %s] 6대 전문 애널리스트 자문단 검수 반려 (종합평점 %d점)", ticker, name, audit_res.total_score)
+        raise RuntimeError(f"대본 검수 불합격:\n{audit_res.summary()}")
+    sections = audit_res.cleaned_script
+    log.info("✔ [%s %s] 6대 국내외 전문 애널리스트 전원 승인 통과 (평점 %d점)", ticker, name, audit_res.total_score)
+
     full_text = "\n\n".join(s["text"] for s in sections)
 
     # 3. 음성 합성 & 타임스탬프
     voice_path, words, subtitles = asyncio.run(generate_voice_and_timestamps(ticker, full_text, sections, force=force))
 
     # 4. Props & Manifest 구성
-    build_props_and_manifest(m, sections, voice_path, words, subtitles)
+    build_props_and_manifest(m, sections, voice_path, words, subtitles, audit_res=audit_res)
     stock_p["prepared"] = True
     save_progress(progress)
 
