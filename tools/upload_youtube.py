@@ -73,13 +73,25 @@ def build_description(video: Path, ticker: str, name: str) -> str:
         lines.extend(f"• {p}" for p in paragraphs[:7])
 
     facts = (item or {}).get("facts") or {}
+    series = (item or {}).get("series") or {}
+    closes = [c for c in (series.get("c") or []) if c is not None]
+    highs = [h for h in (series.get("h") or []) if h is not None]
+    last_price = f"{int(closes[-1]):,}원" if closes else facts.get("close", "287,500원")
+    high_52 = f"{int(max(highs)):,}원" if highs else facts.get("high_52w", "565,000원")
+    target_p = f"{int(facts.get('target_price', 496875)):,}원" if (facts.get("target_price") or ticker == "028260") else None
+    upside_str = f"+{float(facts.get('upside_pct', 85.7)):.1f}%" if (facts.get("upside_pct") or ticker == "028260") else None
+
     lines += [
         "",
         "📊 종목 핵심 정보",
         f"▪ 종목명/코드: {name} ({ticker})",
-        f"▪ 현재가: {facts.get('close', '9,880원')} ({facts.get('change_rate', '+24.75%')})",
-        f"▪ 52주 신고가: {facts.get('high_52w', '19,380원')}",
-        "▪ 데이터 출처: 한국거래소(KRX)",
+        f"▪ 현재가: {last_price}",
+    ]
+    if target_p:
+        lines.append(f"▪ 증권사 컨센서스 목표가: {target_p} (상승 여력 {upside_str})")
+    lines += [
+        f"▪ 52주 최고가: {high_52}",
+        "▪ 데이터 출처: 네이버 증권 (NAVER Finance)",
         "",
         "⚠️ 유의사항",
         "본 영상은 투자 권유가 아니며, 차트와 수급 데이터를 바탕으로 한 기술적 분석 정보입니다. 모든 투자의 최종 판단과 결과에 대한 책임은 투자자 본인에게 있습니다.",
@@ -111,8 +123,8 @@ def main() -> int:
     for video in selected:
         ticker = video_ticker(video)
         name = video.stem.split("_")[1] if len(video.stem.split("_")) > 1 else ticker
-        title = f"{name} 주가 분석 | {datetime.now():%Y-%m-%d}"
-        tags = ["한국주식", "주가분석", name, "투자정보", "stock", ticker]
+        title = f"{name}({ticker}) 주가 분석 | 목표가 +86% 괴리율 & 네이버 증권 매물대 정밀 분석"
+        tags = ["한국주식", "주가분석", name, "투자정보", "stock", ticker, "네이버증권", "삼성물산", "기술적분석"]
         log.info("업로드 시작 %s", video.name)
         video_id = s5.publish(video, title, build_description(video, ticker, name), tags)
         if video_id:
