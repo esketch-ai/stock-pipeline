@@ -24,3 +24,8 @@ contact.txt
 
 # launchd 는 사용자 경로가 하드코딩된다 — tools/portable.py prepare 가 생성한다
 com.stockpipeline.*.plist
+
+# 아카이브 및 마이그레이션 번들
+*.tar.gz
+*.zip
+macmini_migration_pack.tar.gz
