@@ -17,7 +17,7 @@ import re
 import sqlite3
 import ssl
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -361,23 +361,41 @@ def fetch_insider_and_shareholder_changes(ticker: str) -> Dict[str, Any]:
                     continue
 
     insider_buyers = []
+    # 2026-10-16 기준 최근 90일 이내의 실제 장내매수 거래만 필터링
+    cutoff_date = datetime(2026, 10, 16) - timedelta(days=90)
+
     if len(tables) > 6:
         t6 = parse_table_cells(tables[6])
         for r in t6[1:]:
             if len(r) >= 8:
                 reason = r[7]
-                if any(k in reason for k in ["매수", "취득", "수증"]):
+                # 상여금, 스톡옵션 행사, 액면분할, 단순 수증 배제 -> 오직 장내매수/장내취득만 유효
+                if any(k in reason for k in ["장내매수", "장내취득"]):
+                    c_date_str = r[4]
+                    is_recent = False
                     try:
-                        insider_buyers.append({
-                            "name": r[1],
-                            "shares": int(r[2].replace(",", "")) if r[2] else 0,
-                            "ratio": float(r[3]) if r[3] else 0.0,
-                            "change_date": r[4],
-                            "change_shares": int(r[5].replace(",", "")) if r[5] else 0,
-                            "change_reason": reason,
-                        })
+                        dp = c_date_str.strip().split("/")
+                        if len(dp) == 3:
+                            yr = 2000 + int(dp[0])
+                            mo = int(dp[1])
+                            dy = int(dp[2])
+                            if datetime(yr, mo, dy) >= cutoff_date:
+                                is_recent = True
                     except Exception:
-                        continue
+                        pass
+
+                    if is_recent:
+                        try:
+                            insider_buyers.append({
+                                "name": r[1],
+                                "shares": int(r[2].replace(",", "")) if r[2] else 0,
+                                "ratio": float(r[3]) if r[3] else 0.0,
+                                "change_date": r[4],
+                                "change_shares": int(r[5].replace(",", "")) if r[5] else 0,
+                                "change_reason": reason,
+                            })
+                        except Exception:
+                            continue
 
     # 네이버 공시 API (주식소각, 감자, 자기주식, 대형공급계약)
     disc_url = f"https://m.stock.naver.com/api/stock/{ticker}/disclosure?page=1&pageSize=50"
@@ -400,7 +418,21 @@ def fetch_insider_and_shareholder_changes(ticker: str) -> Dict[str, Any]:
     except Exception as exc:
         log.debug("네이버 공시 API 조회 실패 %s: %s", ticker, exc)
 
-    insider_buying_detected = len(insider_buyers) > 0 or primary_holder.get("change_ratio", 0) > 0
+    primary_holder_bought = False
+    if primary_holder.get("change_ratio", 0) > 0 and any(k in primary_holder.get("change_reason", "") for k in ["장내매수", "장내취득"]):
+        c_date_str = primary_holder.get("change_date", "")
+        try:
+            dp = c_date_str.strip().split("/")
+            if len(dp) == 3:
+                yr = 2000 + int(dp[0])
+                mo = int(dp[1])
+                dy = int(dp[2])
+                if datetime(yr, mo, dy) >= cutoff_date:
+                    primary_holder_bought = True
+        except Exception:
+            pass
+
+    insider_buying_detected = len(insider_buyers) > 0 or primary_holder_bought
     treasury_cancellation_detected = len(treasury_cancellations) > 0
 
     return {
@@ -617,6 +649,11 @@ def collect_and_store_full_stock_analytics(ticker: str, name: str) -> Dict[str, 
     i_10d = round(sum((supply.get("institution") or [])[-10:]), 1)
     r_10d = round(sum((supply.get("retail") or [])[-10:]), 1)
 
+    valid_highs = [x for x in (series_enriched.get("h") or []) if x and x > 0]
+    valid_lows = [x for x in (series_enriched.get("l") or []) if x and x > 0]
+    high52 = int(max(valid_highs)) if valid_highs else int(cur_p)
+    low52 = int(min(valid_lows)) if valid_lows else int(cur_p)
+
     # 4. 거시경제 데이터 수집
     macro = fetch_macro_economic_data()
 
@@ -796,9 +833,10 @@ def collect_and_store_full_stock_analytics(ticker: str, name: str) -> Dict[str, 
             "reports": researches[:3]
         },
         "technicals": {
+            "high52": high52, "low52": low52,
             "ma5": ma5_v, "ma20": ma20_v, "ma60": ma60_v, "ma120": ma120_v,
-            "rsi": tech.get("rsi_14"), "bb": (tech.get("bb_lower"), tech.get("bb_upper")),
-            "poc": vp.get("poc_price"), "poc_pct": vp.get("poc_pct"),
+            "rsi": tech.get("rsi_14", 50.0), "bb": (tech.get("bb_lower"), tech.get("bb_upper")),
+            "poc": vp.get("poc_price", cur_p), "poc_pct": vp.get("poc_pct", 15.0),
             "f_10d": f_10d, "i_10d": i_10d, "r_10d": r_10d,
             "sup": sup_p, "res": res_p, "rr": rr_calc
         },
