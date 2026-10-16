@@ -187,7 +187,12 @@ def _env_keys() -> dict:
         "LLM": bool(
             config.openai_key() or config.anthropic_key() or config.gemini_key()
         ),
-        "TTS": bool(config.openai_key() or config.gemini_key() or config.elevenlabs_key()),
+        "TTS": bool(
+            config.openai_key()
+            or config.gemini_key()
+            or config.elevenlabs_key()
+            or (config.TTS_PROVIDER == "gcloud" and bool(config.env("GOOGLE_TTS_PROJECT")))
+        ),
         "YOUTUBE_CLIENT": bool(config.YOUTUBE_CLIENT_ID and config.YOUTUBE_CLIENT_SECRET),
         "YOUTUBE_TOKEN": config.YOUTUBE_TOKEN_PATH.exists(),
     }

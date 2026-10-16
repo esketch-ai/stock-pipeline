@@ -41,6 +41,13 @@ def env_bool(key: str, default: bool = False) -> bool:
     return raw in {"1", "true", "yes", "y", "on"}
 
 
+def env_float(key: str, default: float) -> float:
+    try:
+        return float(env(key, str(default)))
+    except ValueError:
+        return default
+
+
 # ── 파이프라인 설정 ──────────────────────────────────────
 DAILY_VIDEO_COUNT = env_int("DAILY_VIDEO_COUNT", 1)
 VIDEO_RESOLUTION = env("VIDEO_RESOLUTION", "4k")
@@ -73,6 +80,9 @@ OLLAMA_HOST = env("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 TTS_MODEL = env("TTS_MODEL", "tts-1")
 TTS_VOICE = env("TTS_VOICE", "alloy")
+GOOGLE_TTS_VOICE = env("GOOGLE_TTS_VOICE", "ko-KR-Neural2-C")
+GOOGLE_TTS_RATE = env_float("GOOGLE_TTS_RATE", 1.03)
+GOOGLE_TTS_PITCH = env_float("GOOGLE_TTS_PITCH", 0.0)
 
 # 1순위: mlx-whisper (Apple Silicon Metal 가속)
 WHISPER_MODEL = env("WHISPER_MODEL", "mlx-community/whisper-large-v3-turbo")
@@ -134,10 +144,3 @@ RESOLUTION_PRESETS = {
 def resolution() -> tuple[int, int]:
     return RESOLUTION_PRESETS.get(VIDEO_RESOLUTION.lower(), RESOLUTION_PRESETS["4k"])
 LONG_SECTION_GAP = env_int("LONG_SECTION_GAP", 20)
-
-
-def env_float(key: str, default: float) -> float:
-    try:
-        return float(env(key, str(default)))
-    except ValueError:
-        return default

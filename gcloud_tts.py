@@ -32,23 +32,31 @@ import config
 from logger import log
 
 ENDPOINT = "https://texttospeech.googleapis.com/v1/text:synthesize"
-# 2026-10 실측으로 확인된 한국어 음성 목록.
-# (ko-KR-Studio-* 는 한국어 미지원 — API 가 "does not exist" 로 거절한다)
+# 2026-10 실측으로 확인된 한국어 음성 목록 (Neural2, Chirp3-HD, Wavenet, Standard).
 SUPPORTED_VOICES = {
-    # 남성 — 낮은 베이스 · 신뢰감 우선 (기본값)
-    "ko-KR-Wavenet-A": ("ko-KR", "남성 · 웨이브넷 (기본)"),
-    "ko-KR-Neural2-A": ("ko-KR", "남성 · 뉴럴2"),
-    "ko-KR-Standard-A": ("ko-KR", "남성 · 스탠다드"),
-    # 중성
-    "ko-KR-Wavenet-C": ("ko-KR", "중성 · 웨이브넷"),
-    "ko-KR-Neural2-C": ("ko-KR", "중성 · 뉴럴2"),
-    "ko-KR-Standard-C": ("ko-KR", "중성 · 스탠다드"),
-    # 여성
-    "ko-KR-Neural2-B": ("ko-KR", "여성 · 뉴럴2"),
-    "ko-KR-Wavenet-B": ("ko-KR", "여성 · 웨이브넷"),
-    "ko-KR-Standard-B": ("ko-KR", "여성 · 스탠다드"),
-    "ko-KR-Wavenet-D": ("ko-KR", "여성 · 웨이브넷(추가)"),
-    "ko-KR-Standard-D": ("ko-KR", "여성 · 스탠다드(추가)"),
+    # ── [추천] 뉴럴2 (Neural2) : SSML 다이내믹스 & 감정 표현 최적화 ──
+    "ko-KR-Neural2-C": ("ko-KR", "남성 · 뉴럴2 (유튜브 애널리스트 추천)"),
+    "ko-KR-Neural2-A": ("ko-KR", "여성 · 뉴럴2 (당찬 수석 애널리스트)"),
+    "ko-KR-Neural2-B": ("ko-KR", "여성 · 뉴럴2 (차분한 정통 분석관)"),
+
+    # ── [차세대] Chirp3-HD : 최신 고음질 생성형 AI 보이스 ──
+    "ko-KR-Chirp3-HD-Fenrir": ("ko-KR", "남성 · Chirp3 생성형 HD (세련된 전문가)"),
+    "ko-KR-Chirp3-HD-Puck": ("ko-KR", "남성 · Chirp3 생성형 HD (밝고 경쾌한 도파민)"),
+    "ko-KR-Chirp3-HD-Charon": ("ko-KR", "남성 · Chirp3 생성형 HD (중후한 베이스)"),
+    "ko-KR-Chirp3-HD-Kore": ("ko-KR", "여성 · Chirp3 생성형 HD (지적이고 생생한 톤)"),
+    "ko-KR-Chirp3-HD-Aoede": ("ko-KR", "여성 · Chirp3 생성형 HD (차분한 앵커 톤)"),
+
+    # ── 웨이브넷 (Wavenet) ──
+    "ko-KR-Wavenet-C": ("ko-KR", "남성 · 웨이브넷 C"),
+    "ko-KR-Wavenet-D": ("ko-KR", "남성 · 웨이브넷 D"),
+    "ko-KR-Wavenet-A": ("ko-KR", "여성 · 웨이브넷 A"),
+    "ko-KR-Wavenet-B": ("ko-KR", "여성 · 웨이브넷 B"),
+
+    # ── 스탠다드 (Standard) ──
+    "ko-KR-Standard-C": ("ko-KR", "남성 · 스탠다드 C"),
+    "ko-KR-Standard-D": ("ko-KR", "남성 · 스탠다드 D"),
+    "ko-KR-Standard-A": ("ko-KR", "여성 · 스탠다드 A"),
+    "ko-KR-Standard-B": ("ko-KR", "여성 · 스탠다드 B"),
 }
 
 
@@ -57,19 +65,19 @@ def project_id() -> str:
 
 
 def voice_name() -> str:
-    return config.env("GOOGLE_TTS_VOICE", "ko-KR-Wavenet-A")
+    return config.env("GOOGLE_TTS_VOICE", "ko-KR-Neural2-C")
 
 
 def pitch_semitones() -> float:
     """음높이 보정 (반음 단위). 음수면 낮아진다."""
     try:
-        return float(config.env("GOOGLE_TTS_PITCH", "-4.0"))
+        return float(config.env("GOOGLE_TTS_PITCH", "0.0"))
     except ValueError:
-        return -4.0
+        return 0.0
 
 
 def speaking_rate() -> float:
-    return float(config.env("GOOGLE_TTS_RATE", "0.97"))
+    return float(config.env("GOOGLE_TTS_RATE", "1.03"))
 
 
 def is_configured() -> bool:
@@ -132,8 +140,11 @@ def synth(text: str, out: Path, rate: float = 1.0, pitch: float = 0.0) -> Path |
     name = voice_name()
     lang = SUPPORTED_VOICES.get(name, ("ko-KR", ""))[0]
 
+    is_ssml = text.strip().startswith("<speak>") and text.strip().endswith("</speak>")
+    input_payload = {"ssml": text} if is_ssml else {"text": text}
+
     payload = {
-        "input": {"text": text},
+        "input": input_payload,
         "voice": {"languageCode": lang, "name": name},
         "audioConfig": {
             "audioEncoding": "MP3",
@@ -190,6 +201,9 @@ def probe(text: str = "동양고속 37,200원입니다.") -> dict:
 
     import httpx
 
+    is_ssml = text.strip().startswith("<speak>") and text.strip().endswith("</speak>")
+    input_payload = {"ssml": text} if is_ssml else {"text": text}
+
     try:
         r = httpx.post(
             ENDPOINT,
@@ -199,9 +213,13 @@ def probe(text: str = "동양고속 37,200원입니다.") -> dict:
                 "x-goog-user-project": project,
             },
             json={
-                "input": {"text": text},
+                "input": input_payload,
                 "voice": {"languageCode": "ko-KR", "name": voice_name()},
-                "audioConfig": {"audioEncoding": "MP3"},
+                "audioConfig": {
+                    "audioEncoding": "MP3",
+                    "speakingRate": speaking_rate(),
+                    "pitch": pitch_semitones(),
+                },
             },
             timeout=60,
         )

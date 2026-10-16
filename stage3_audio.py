@@ -31,6 +31,9 @@ def _spoken_text(text: str) -> str:
 
 
 async def _tts_openai(text: str, out: Path) -> Path:
+    import voice_director
+
+    spoken = voice_director.direct_script_for_tts(text, provider="openai")
     async with httpx.AsyncClient(timeout=config.API_TIMEOUT) as client:
         resp = await client.post(
             "https://api.openai.com/v1/audio/speech",
@@ -38,7 +41,7 @@ async def _tts_openai(text: str, out: Path) -> Path:
             json={
                 "model": config.env("TTS_MODEL", "tts-1"),
                 "voice": config.env("TTS_VOICE", "alloy"),
-                "input": text,
+                "input": spoken,
                 "response_format": "mp3",
             },
         )
@@ -48,21 +51,25 @@ async def _tts_openai(text: str, out: Path) -> Path:
 
 
 async def _tts_gcloud(text: str, out: Path) -> Path:
-    """Google Cloud TTS (Neural2 한국어).
+    """Google Cloud TTS (Neural2/Chirp3 한국어 + 방송 오디오 디렉팅).
 
-    숫자 표기를 그대로 정확히 읽는다.
-      '172,800원' -> '172,800원'   (LLM TTS 는 '172만 1,800원' 으로 틀린다)
-    따라서 한글 숫자 변환을 하지 않는다.
+    숫자 표기를 그대로 정확히 읽으며, voice_director 를 통해
+    '뿌셔 보까!', 도파민 훅, 리스크 경고, 3대 수칙 등에
+    역동적인 피치/속도/볼륨의 SSML 다이내믹스를 부여한다.
     """
     import asyncio as _aio
 
     import gcloud_tts
+    import voice_director
 
-    rate = config.env_float("GOOGLE_TTS_RATE", 1.0)
+    # 방송 30년 차 오디오 디렉팅: 다이내믹 SSML 연출 적용
+    directed_text = voice_director.direct_script_for_tts(text, provider="gcloud")
+
+    rate = config.env_float("GOOGLE_TTS_RATE", 1.03)
     pitch = config.env_float("GOOGLE_TTS_PITCH", 0.0)
 
     path = await _aio.to_thread(
-        gcloud_tts.synth, text, out, rate, pitch
+        gcloud_tts.synth, directed_text, out, rate, pitch
     )
     if path is None:
         raise RuntimeError("Google Cloud TTS 합성 실패")
