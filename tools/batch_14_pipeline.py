@@ -37,23 +37,33 @@ import stage4_render
 import stage5_publish
 from logger import log
 
-# 시장 평가성 & 자본 보존형 스크리닝 통과 14대 우량 종목 바스켓
-DEFAULT_14_TICKERS = [
-    ("028260", "삼성물산"),       # 시장평가성 100점 (제작 및 업로드 완료)
+# 1일 유튜브 정책 및 알고리즘 최적화: 당일 시장 평가성 최상위 핵심 6대 종목 (Daily Elite Top 6)
+DEFAULT_TOP6_TICKERS = [
+    ("028260", "삼성물산"),       # 시장평가성 100점
     ("009540", "HD한국조선해양"),   # 시장평가성 95점
     ("035420", "NAVER"),          # 시장평가성 95점
     ("000660", "SK하이닉스"),     # 시장평가성 95점
     ("005930", "삼성전자"),       # 시장평가성 95점
     ("034730", "SK"),             # 시장평가성 95점
-    ("012330", "현대모비스"),     # 시장평가성 91점
-    ("066570", "LG전자"),         # 시장평가성 91점
-    ("017670", "SK텔레콤"),       # 시장평가성 91점
-    ("028670", "팬오션"),         # 시장평가성 90점
-    ("011200", "HMM"),            # 시장평가성 85점
-    ("012750", "에스원"),         # 시장평가성 85점
-    ("030200", "KT"),             # 시장평가성 85점
-    ("032640", "LG유플러스"),     # 시장평가성 85점
-    ("009470", "삼화전기"),       # 시장평가성 80점
+]
+
+# 14대 우량 종목 풀 바스켓
+DEFAULT_14_TICKERS = [
+    ("028260", "삼성물산"),
+    ("009540", "HD한국조선해양"),
+    ("035420", "NAVER"),
+    ("000660", "SK하이닉스"),
+    ("005930", "삼성전자"),
+    ("034730", "SK"),
+    ("012330", "현대모비스"),
+    ("066570", "LG전자"),
+    ("017670", "SK텔레콤"),
+    ("028670", "팬오션"),
+    ("011200", "HMM"),
+    ("012750", "에스원"),
+    ("030200", "KT"),
+    ("032640", "LG유플러스"),
+    ("009470", "삼화전기"),
 ]
 
 PROGRESS_FILE = config.STATE_DIR / "batch_14_progress.json"
@@ -489,9 +499,10 @@ def main() -> int:
     parser.add_argument("--step", choices=["all", "prepare", "render", "upload"], default="all")
     parser.add_argument("--force", action="store_true", help="음성 및 렌더링 강제 재생성")
     parser.add_argument("--no-upload", action="store_true", help="유튜브 업로드 생략 (영상 제작까지만)")
+    parser.add_argument("--all-14", action="store_true", help="14대 우량 종목 전체 실행 (기본: 최상위 핵심 6대 종목)")
     args = parser.parse_args()
 
-    target_list = DEFAULT_14_TICKERS
+    target_list = DEFAULT_14_TICKERS if args.all_14 else DEFAULT_TOP6_TICKERS
     if args.tickers:
         wanted = [t.strip() for t in args.tickers.split(",") if t.strip()]
         name_dict = {t: n for t, n in DEFAULT_14_TICKERS}

@@ -128,9 +128,14 @@ def _item_props(ticker: str, item: dict) -> dict:
 
     annotations = _build_annotations(ticker, scenes, series, levels, item.get("facts"))
 
+    import investment_highlights
+    stock_name = item.get("name") or script.get("name") or ticker
+    key_points = investment_highlights.get_highlights(ticker, stock_name, item.get("facts"))
+
     return {
         "ticker": ticker,
-        "name": item.get("name") or script.get("name") or ticker,
+        "name": stock_name,
+        "keyPoints": key_points,
         "audioSrc": item["audio"],
         "timestamps": timestamps,
         "subtitles": item.get("subtitles") or [],

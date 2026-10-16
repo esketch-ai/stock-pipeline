@@ -24,6 +24,7 @@ import type { InvestorInsight } from './components/investorProfiles';
 import { DustMotes, FilmGrain, PulseGlow, ScaleLayer, SceneWipe, Vignette } from './components/Vfx';
 import { ChartAnnotationLayer, type ChartAnnotation } from './components/ChartAnnotationLayer';
 import { useChartCamera } from './components/useChartCamera';
+import { HeroIntroOverlay } from './components/HeroIntroOverlay';
 
 const BACKPAD_SAFE = '#0B1220';
 
@@ -619,11 +620,11 @@ const StockVideo: React.FC<{ items: VideoItem[] }> = ({ items }) => {
       .filter((p): p is Pointer => p !== null);
   }, [cues, series, activeKind]);
 
-  // 전역 페이드 (시작/끝)
+  // 전역 페이드 (영상 종료 시 자연스러운 페이드아웃)
   const globalFade = interpolate(
     frame,
-    [0, fps * 0.5, durationInFrames - fps * 1.5, durationInFrames],
-    [0, 1, 1, 0],
+    [durationInFrames - fps * 1.5, durationInFrames],
+    [1, 0],
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
 
@@ -638,13 +639,6 @@ const StockVideo: React.FC<{ items: VideoItem[] }> = ({ items }) => {
 
       <div style={{ opacity: globalFade }}>
         {scenes.length > 0 ? (
-          frame < titleFrames ? (
-            <TitleCard
-              name={item.script?.name ?? item.name}
-              ticker={item.ticker}
-              durationFrames={titleFrames}
-            />
-          ) : (
           <SceneView
             scenes={scenes}
             supply={supply}
@@ -655,7 +649,6 @@ const StockVideo: React.FC<{ items: VideoItem[] }> = ({ items }) => {
             investorInsight={item.investorInsight}
             annotations={item.annotations}
           />
-          )
         ) : (
           <>
         <TitleCard
@@ -694,6 +687,15 @@ const StockVideo: React.FC<{ items: VideoItem[] }> = ({ items }) => {
           progress={progress}
           contact={contact}
           persistentQr={process.env.CONTACT_QR_PERSISTENT === '1'}
+        />
+
+        {/* 첫 화면(0초 썸네일 & 오프닝 4초) 전용 시네마틱 종목명·코드·3대 핵심 투자 포인트 오버레이 */}
+        <HeroIntroOverlay
+          name={item.script?.name ?? item.name}
+          ticker={item.ticker}
+          keyPoints={item.keyPoints}
+          stats={item.scenes?.[0]?.stats}
+          durationSeconds={4.2}
         />
       </div>
       {/* 그레인은 텍스트 위에 얹어 필름 질감을 만든다 (읽기 해치지 않는 농도) */}

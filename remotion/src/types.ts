@@ -146,6 +146,7 @@ export type VideoItem = {
   cues?: Cue[];
   subtitles?: { text: string; start: number; end: number }[];
   annotations?: import('./components/ChartAnnotationLayer').ChartAnnotation[];
+  keyPoints?: import('./components/HeroIntroOverlay').KeyPoint[];
 };
 
 export type VideoProps = {

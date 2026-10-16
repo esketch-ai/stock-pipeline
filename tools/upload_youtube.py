@@ -120,12 +120,13 @@ def main() -> int:
 
     print(f"업로드 {len(selected)}편 · 공개 상태 {config.YOUTUBE_VISIBILITY}\n", flush=True)
     failed = []
+    import investment_highlights
     for video in selected:
         ticker = video_ticker(video)
         name = video.stem.split("_")[1] if len(video.stem.split("_")) > 1 else ticker
-        title = f"{name}({ticker}) 주가 분석 | 목표가 +86% 괴리율 & 네이버 증권 매물대 정밀 분석"
-        tags = ["한국주식", "주가분석", name, "투자정보", "stock", ticker, "네이버증권", "삼성물산", "기술적분석"]
-        log.info("업로드 시작 %s", video.name)
+        title = investment_highlights.get_youtube_title(ticker, name)
+        tags = ["한국주식", "주가분석", name, "투자정보", "stock", ticker, "네이버증권", "기술적분석", "기업분석"]
+        log.info("업로드 시작 %s: %s", video.name, title)
         video_id = s5.publish(video, title, build_description(video, ticker, name), tags)
         if video_id:
             video.with_suffix(".published").write_text(video_id, encoding="utf-8")
