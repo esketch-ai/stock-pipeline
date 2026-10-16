@@ -125,7 +125,13 @@ def build_market_evaluation_report(ticker: str, name: str) -> Dict[str, Any]:
 
 
 def generate_market_evaluated_script(ticker: str, name: str) -> List[Dict[str, str]]:
-    """종목 고유의 실측 수치와 실제 공시/수급 팩트에 100% 기반한 정직한 전문 대본 생성."""
+    """6대 전문 애널리스트 팩트 + 30년 경력 강이현 수석 작가의 초보자 맞춤형 스토리텔링 대본 생성."""
+    m = build_market_evaluation_report(ticker, name)
+    import scenario_writer_30yr
+    return scenario_writer_30yr.write_accessible_storytelling_script(m)
+
+
+def _deprecated_legacy_script(ticker: str, name: str) -> List[Dict[str, str]]:
     m = build_market_evaluation_report(ticker, name)
     cur_p = m["cur_price"]
     high52 = m["high52"]
