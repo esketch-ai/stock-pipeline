@@ -65,14 +65,15 @@ class VideoEditorDirector:
             t0, t1 = s0["from"], s0["to"]
             upside = facts.get("upside_pct") if isinstance(facts, dict) else None
             upside_str = f"+{float(upside):.0f}%" if upside else "+86%"
+            # [레이저 타깃 십자선 & 락온 스코프 드로잉]
             annotations.append({
                 "id": "ann-selection-signal",
                 "from": round(t0 + 1.4, 2),
                 "to": round(t1 - 0.6, 2),
-                "kind": "box",
+                "kind": "laser_target",
                 "panel": "price",
                 "index": vol_max_idx,
-                "title": "시장 평가성 검증 완료",
+                "title": "시장 평가성 락온 TARGET",
                 "sub": f"증권사 컨센서스 {upside_str} 괴리율 · 외국인 집중 순매집",
                 "tone": "accent",
                 "drawDuration": 0.55,
@@ -114,16 +115,19 @@ class VideoEditorDirector:
                 "drawDuration": 0.55,
                 "eraseDuration": 0.4,
             })
-            # 1-2. 윗꼬리 매도벽 사각 테두리 (box) 드로잉
+            # 1-2. 윗꼬리 매도벽 레이저 포인트 실시간 궤적 드로잉 (laser_trace)
             wick_h = series.get("h", [0])[wick_idx] or c_close
             annotations.append({
                 "id": "ann-candle-wick",
                 "from": round(mid, 2),
                 "to": round(t1 - 1.0, 2),
-                "kind": "box",
+                "kind": "laser_trace",
                 "panel": "price",
                 "index": wick_idx,
-                "title": "윗꼬리 매도벽",
+                "endIndex": wick_idx,
+                "price": wick_h,
+                "endPrice": c_close,
+                "title": "윗꼬리 매도벽 압력 궤적",
                 "sub": f"{wick_h:,.0f}원선 차익 실현 출회 및 저항 확인",
                 "tone": "down",
                 "drawDuration": 0.5,
@@ -143,15 +147,15 @@ class VideoEditorDirector:
             last_v = series.get("v", [0])[last_idx] or 500000
             vol_multiple = max(2, int(max_v / last_v)) if last_v else 5
 
-            # 3-1. 거래량 폭발 기둥 손그림 동그라미 (circle) 드로잉
+            # 3-1. 거래량 폭발 기둥 레이저 타깃 락온 스코프 드로잉 (laser_target)
             annotations.append({
                 "id": "ann-vol-surge",
                 "from": round(t0 + 1.4, 2),
                 "to": round(mid, 2),
-                "kind": "circle",
+                "kind": "laser_target",
                 "panel": "volume",
                 "index": vol_max_idx,
-                "title": f"거래량 폭발 ({max_v / 10000:,.0f}만 주)",
+                "title": f"거래량 폭발 락온 ({max_v / 10000:,.0f}만 주)",
                 "sub": f"평소 대비 {vol_multiple}배 유동성 폭증 · 신규 추세 신호탄",
                 "tone": "accent",
                 "drawDuration": 0.55,
@@ -192,32 +196,41 @@ class VideoEditorDirector:
                 else "🔴5일 · 🟠20일 · 🔵60일 · 🟣120일 이동평균선"
             )
 
-            # 4-1. 4대 이평선 배열 점검
+            # 4-1. 다이나믹 채널 밴드 & 레인지 브래킷 드로잉 (range_bracket)
+            band_low = min([v for v in [ma5_v, ma20_v, ma60_v, ma120_v] if v] or [sup_price])
+            band_high = max([v for v in [ma5_v, ma20_v, ma60_v, ma120_v] if v] or [res1_price])
             annotations.append({
                 "id": "ann-ma-align",
                 "from": round(t0 + 1.4, 2),
                 "to": round(mid, 2),
-                "kind": "box",
+                "kind": "range_bracket",
                 "panel": "price",
-                "index": last_idx,
-                "title": "4대 이동평균선 배열 점검",
+                "index": max(0, last_idx - 25),
+                "endIndex": last_idx,
+                "price": band_low,
+                "endPrice": band_high,
+                "title": "4대 이동평균선 수렴 밴드",
                 "sub": ma_sub,
                 "tone": "accent",
                 "drawDuration": 0.55,
                 "eraseDuration": 0.4,
             })
-            # 4-2. RSI 19 극단 과매도 바닥 탈출 포인터
+            # 4-2. RSI 19 극단 과매도 반등 포물선 궤적 레이저 화살표 (curved_arrow)
             annotations.append({
                 "id": "ann-ma-rsi",
                 "from": round(mid, 2),
                 "to": round(t1 - 1.0, 2),
-                "kind": "pointer",
+                "kind": "curved_arrow",
                 "panel": "price",
-                "index": last_idx,
-                "title": "RSI 19.2 극단 과매도 바닥",
+                "index": max(0, last_idx - 16),
+                "endIndex": last_idx,
+                "price": sup_price,
+                "endPrice": ma20_v or int(last_price * 1.06),
+                "controlPrice": int(sup_price * 0.96),
+                "title": "RSI 19.2 극단 과매도 반등 궤적",
                 "sub": "역사적 침체권 진입 · 🔴5일선 안착 시 기술적 반등 가속",
                 "tone": "up",
-                "drawDuration": 0.5,
+                "drawDuration": 0.55,
                 "eraseDuration": 0.4,
             })
 
@@ -231,18 +244,18 @@ class VideoEditorDirector:
             mid = t0 + dur * 0.5
 
             high_val = series.get("h", [0])[high52_idx] or max(series.get("h", [0])) or last_price
-            # 5-1. 52주 최고점발 하락 추세선 (trendline) 대각선 드로잉
+            # 5-1. 52주 최고점발 하락 추세선 레이저 포인트 실시간 궤적 드로잉 (laser_trace)
             annotations.append({
                 "id": "ann-trend-high",
                 "from": round(t0 + 1.4, 2),
                 "to": round(mid, 2),
-                "kind": "trendline",
+                "kind": "laser_trace",
                 "panel": "price",
                 "index": high52_idx,
                 "endIndex": last_idx,
                 "price": high_val,
                 "endPrice": last_price,
-                "title": "하락 추세선 저항선 돌파 시도",
+                "title": "하락 추세선 레이저 저항 궤적",
                 "sub": f"52주 최고점({high_val:,.0f}원)발 하락 압력 소화 국면",
                 "tone": "purple",
                 "drawDuration": 0.65,
@@ -280,18 +293,28 @@ class VideoEditorDirector:
             t_act2_end = round(t0 + dur * 0.65, 2)
             t_act3_start = round(t0 + dur * 0.66, 2)
 
-            # [1막: 0 ~ 32%] W자형 이중 바닥 패턴 분석 (동그라미 드로잉 + 상단 스마트 카드)
+            # [1막: 0 ~ 32%] W자형 이중 바닥 N자 파동 레이저 패스 드로잉 (zigzag_wave)
+            wave_p0 = max(0, vol_max_idx - 14)
+            wave_p1 = max(0, vol_max_idx - 7)
+            wave_p2 = vol_max_idx
+            wave_p3 = last_idx
             annotations.append({
                 "id": "ann-pattern-doublebottom",
                 "from": round(t0 + 1.4, 2),
                 "to": t_act1_end,
-                "kind": "circle",
+                "kind": "zigzag_wave",
                 "panel": "price",
                 "index": vol_max_idx,
-                "title": "W자형 이중 바닥 패턴",
+                "points": [
+                    {"index": wave_p0, "price": sup_price, "label": "① 1차바닥"},
+                    {"index": wave_p1, "price": int(sup_price * 1.06), "label": "② 넥라인"},
+                    {"index": wave_p2, "price": sup_price, "label": "③ 2차바닥"},
+                    {"index": wave_p3, "price": res1_price, "label": "④ 2차돌파"},
+                ],
+                "title": "W자형 이중 바닥 N자 파동 궤적",
                 "sub": "바닥 다지기 후 넥라인 돌파 및 상승 삼각형 수렴",
                 "tone": "up",
-                "drawDuration": 0.55,
+                "drawDuration": 0.6,
                 "eraseDuration": 0.4,
             })
 
