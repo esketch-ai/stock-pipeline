@@ -657,12 +657,23 @@ def collect_and_store_full_stock_analytics(ticker: str, name: str) -> Dict[str, 
     ))
 
     # 3) valuation_consensus
-    per_val = float(str(info.get("PER", "15.0")).replace("배", "").replace(",", "")) if info.get("PER") else 15.0
-    f_per_val = float(str(info.get("추정PER", str(per_val))).replace("배", "").replace(",", "")) if info.get("추정PER") and info.get("추정PER") != "N/A" else per_val
-    pbr_val = float(str(info.get("PBR", "0.5")).replace("배", "").replace(",", "")) if info.get("PBR") else 0.5
-    bps_val = float(str(info.get("BPS", "0")).replace("원", "").replace(",", "")) if info.get("BPS") else cur_p * 2
-    eps_val = float(str(info.get("EPS", "0")).replace("원", "").replace(",", "")) if info.get("EPS") else cur_p / per_val
-    div_yield = float(str(info.get("배당수익률", "1.0%")).replace("%", "").replace(",", "")) if info.get("배당수익률") and info.get("배당수익률") != "N/A" else 1.0
+    def _parse_safe_num(val: Any, default: float = 0.0) -> float:
+        if val is None:
+            return default
+        s = str(val).replace("배", "").replace("원", "").replace("%", "").replace(",", "").strip()
+        if not s or s in ("N/A", "NaN", "-", "null", "None"):
+            return default
+        try:
+            return float(s)
+        except Exception:
+            return default
+
+    per_val = _parse_safe_num(info.get("PER"), 15.0)
+    f_per_val = _parse_safe_num(info.get("추정PER"), per_val)
+    pbr_val = _parse_safe_num(info.get("PBR"), 0.5)
+    bps_val = _parse_safe_num(info.get("BPS"), cur_p * 2)
+    eps_val = _parse_safe_num(info.get("EPS"), cur_p / per_val if per_val else cur_p)
+    div_yield = _parse_safe_num(info.get("배당수익률"), 1.0)
 
     researches = integ.get("researches", [])
     cur.execute("""
