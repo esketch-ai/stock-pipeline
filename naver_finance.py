@@ -160,6 +160,13 @@ def fetch_ohlcv_naver(ticker: str, count: int = 180) -> Optional[Dict[str, List[
         except (ValueError, TypeError):
             continue
 
+        # 거래정지일(o, h, l 이 0인 경우) 보정: 0으로 곤두박질치는 차트 왜곡 방지
+        if c_val > 0 and (o_val <= 0 or h_val <= 0 or l_val <= 0):
+            prev_c = closes[-1] if closes else c_val
+            o_val = prev_c
+            h_val = max(prev_c, c_val)
+            l_val = min(prev_c, c_val)
+
         dates.append(iso_d)
         opens.append(o_val)
         highs.append(h_val)

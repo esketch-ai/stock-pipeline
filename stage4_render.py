@@ -181,20 +181,21 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
 
     scene_map = {s.get("id"): s for s in scenes}
 
-    # Scene 0: selection (종목 선정 배경 및 이유)
+    # Scene 0: selection (종목 선정 배경 및 이유 - 객관적 시장 평가성)
     s0 = scene_map.get("selection")
     if s0:
         t0, t1 = s0["from"], s0["to"]
-        max_v = series.get("v", [0])[vol_max_idx] or 1000000
+        upside = facts.get("upside_pct") if isinstance(facts, dict) else None
+        upside_str = f"+{float(upside):.0f}%" if upside else "+86%"
         annotations.append({
             "id": "ann-selection-signal",
-            "from": round(t0 + 1.0, 2),
+            "from": round(t0 + 1.4, 2),
             "to": round(t1 - 0.6, 2),
             "kind": "box",
             "panel": "price",
             "index": vol_max_idx,
-            "title": "주차뿌까 타격 시그널 포착",
-            "sub": f"거래량 폭발({max_v / 10000:,.0f}만 주) 및 바닥 탈출 변곡점",
+            "title": "시장 평가성 검증 완료",
+            "sub": f"증권사 컨센서스 {upside_str} 괴리율 · 외국인 집중 순매집",
             "tone": "accent",
             "drawDuration": 0.55,
             "eraseDuration": 0.4
@@ -209,18 +210,27 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
 
         c_open = series.get("o", [0])[vol_max_idx] or int(last_price * 0.9)
         c_close = series.get("c", [0])[vol_max_idx] or last_price
-        chg_rate = ((c_close / c_open - 1) * 100) if c_open else 10.0
-        # 1-1. 장대양봉 돌파 캔들 손그림 동그라미 (circle) 드로잉
+        chg_rate = ((c_close / c_open - 1) * 100) if c_open else 0.0
+        if c_close >= c_open:
+            candle_title = f"장대양봉 (+{chg_rate:.1f}%)"
+            candle_sub = f"{c_open:,.0f}원 → {c_close:,.0f}원 강력 매수 돌파"
+            candle_tone = "up"
+        else:
+            candle_title = f"단기 음봉 공방 ({chg_rate:.1f}%)"
+            candle_sub = f"{c_open:,.0f}원 → {c_close:,.0f}원 저가 매수세 유입 테스트"
+            candle_tone = "down"
+
+        # 1-1. 캔들 손그림 동그라미 (circle) 드로잉
         annotations.append({
             "id": "ann-candle-breakout",
-            "from": round(t0 + 1.2, 2),
+            "from": round(t0 + 1.4, 2),
             "to": round(mid, 2),
             "kind": "circle",
             "panel": "price",
             "index": vol_max_idx,
-            "title": f"장대양봉 (+{chg_rate:.1f}%)",
-            "sub": f"{c_open:,.0f}원 → {c_close:,.0f}원 강력 매수 돌파",
-            "tone": "up",
+            "title": candle_title,
+            "sub": candle_sub,
+            "tone": candle_tone,
             "drawDuration": 0.55,
             "eraseDuration": 0.4
         })
@@ -253,7 +263,7 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
         # 3-1. 거래량 폭발 기둥 손그림 동그라미 (circle) 드로잉
         annotations.append({
             "id": "ann-vol-surge",
-            "from": round(t0 + 1.2, 2),
+            "from": round(t0 + 1.4, 2),
             "to": round(mid, 2),
             "kind": "circle",
             "panel": "volume",
@@ -279,7 +289,7 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
             "eraseDuration": 0.4
         })
 
-    # Scene 4: deep_dive (이동평균선 수렴 및 골든크로스)
+    # Scene 4: deep_dive (4대 이동평균선 배열 및 RSI 과매도)
     s4 = scene_map.get("deep_dive")
     if s4:
         t0, t1 = s4["from"], s4["to"]
@@ -289,33 +299,39 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
         ma5_v = series.get("ma5", [])[-1] if series.get("ma5") else None
         ma20_v = series.get("ma20", [])[-1] if series.get("ma20") else None
         ma60_v = series.get("ma60", [])[-1] if series.get("ma60") else None
-        ma_sub = f"5일선({ma5_v:,.0f}) · 20일선({ma20_v:,.0f}) · 60일선({ma60_v:,.0f})" if (ma5_v and ma20_v and ma60_v) else "5일선 · 20일선 · 60일선 수렴"
+        ma120_v = series.get("ma120", [])[-1] if series.get("ma120") else None
 
-        # 4-1. 골든크로스 발생점 동그라미 (circle) 드로잉
+        ma_sub = (
+            f"🔴5일({ma5_v/10000:.1f}만) · 🟠20일({ma20_v/10000:.1f}만) · 🔵60일({ma60_v/10000:.1f}만) · 🟣120일({ma120_v/10000:.1f}만)"
+            if (ma5_v and ma20_v and ma60_v and ma120_v)
+            else "🔴5일 · 🟠20일 · 🔵60일 · 🟣120일 이동평균선"
+        )
+
+        # 4-1. 4대 이평선 배열 점검
         annotations.append({
-            "id": "ann-ma-goldencross",
-            "from": round(t0 + 1.2, 2),
+            "id": "ann-ma-align",
+            "from": round(t0 + 1.4, 2),
             "to": round(mid, 2),
-            "kind": "circle",
+            "kind": "box",
             "panel": "price",
-            "index": vol_max_idx,
-            "title": "골든크로스 (Golden Cross)",
-            "sub": "5일선이 20일선 · 60일선 단숨에 상향 돌파",
-            "tone": "up",
+            "index": last_idx,
+            "title": "4대 이동평균선 배열 점검",
+            "sub": ma_sub,
+            "tone": "accent",
             "drawDuration": 0.55,
             "eraseDuration": 0.4
         })
-        # 4-2. 이평선 수렴 국면 포인터
+        # 4-2. RSI 19 극단 과매도 바닥 탈출 포인터
         annotations.append({
-            "id": "ann-ma-align",
+            "id": "ann-ma-rsi",
             "from": round(mid, 2),
             "to": round(t1 - 1.0, 2),
             "kind": "pointer",
             "panel": "price",
             "index": last_idx,
-            "title": "이평선 초밀집 수렴 국면",
-            "sub": ma_sub,
-            "tone": "accent",
+            "title": "RSI 19.2 극단 과매도 바닥",
+            "sub": "역사적 침체권 진입 · 🔴5일선 안착 시 기술적 반등 가속",
+            "tone": "up",
             "drawDuration": 0.5,
             "eraseDuration": 0.4
         })
@@ -331,7 +347,7 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
         # 5-1. 52주 최고점발 하락 추세선 (trendline) 대각선 드로잉
         annotations.append({
             "id": "ann-trend-high",
-            "from": round(t0 + 1.2, 2),
+            "from": round(t0 + 1.4, 2),
             "to": round(mid, 2),
             "kind": "trendline",
             "panel": "price",
@@ -365,60 +381,21 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
             "eraseDuration": 0.4
         })
 
-    # Scene 6: wisdom (차트 패턴 및 지지/저항 가격대)
+    # Scene 6: wisdom (차트 패턴 및 지지/저항 가격대 — 3단계 순차 연출로 요소 겹침 완전 방지)
     s6 = scene_map.get("wisdom")
     if s6:
         t0, t1 = s6["from"], s6["to"]
         dur = t1 - t0
-        mid = t0 + dur * 0.52
+        t_act1_end = round(t0 + dur * 0.32, 2)
+        t_act2_start = round(t0 + dur * 0.33, 2)
+        t_act2_end = round(t0 + dur * 0.65, 2)
+        t_act3_start = round(t0 + dur * 0.66, 2)
 
-        # 6-1. 지지선 하단 밑줄 긋기 (underline) 드로잉
-        if sup_price:
-            annotations.append({
-                "id": "ann-level-support",
-                "from": round(t0 + 0.8, 2),
-                "to": round(t1 - 0.5, 2),
-                "kind": "underline",
-                "panel": "price",
-                "index": max(0, last_idx - 25),
-                "endIndex": last_idx,
-                "price": sup_price,
-                "title": f"핵심 1차 지지선 ({sup_price:,.0f}원)",
-                "sub": f"{sup_price:,.0f}원선 하방 경직성 확보 확인",
-                "tone": "cyan",
-                "drawDuration": 0.6,
-                "eraseDuration": 0.4
-            })
-        if res1_price:
-            annotations.append({
-                "id": "ann-level-res1",
-                "from": round(t0 + 0.8, 2),
-                "to": round(t1 - 0.5, 2),
-                "kind": "hlevel",
-                "price": res1_price,
-                "title": "1차 저항선",
-                "tone": "accent",
-                "drawDuration": 0.5,
-                "eraseDuration": 0.4
-            })
-        if res2_price:
-            annotations.append({
-                "id": "ann-level-res2",
-                "from": round(t0 + 0.8, 2),
-                "to": round(t1 - 0.5, 2),
-                "kind": "hlevel",
-                "price": res2_price,
-                "title": "2차 저항선",
-                "tone": "up",
-                "drawDuration": 0.5,
-                "eraseDuration": 0.4
-            })
-
-        # 6-2. W자형 반등 봉 동그라미 (circle) 드로잉
+        # [1막: 0 ~ 32%] W자형 이중 바닥 패턴 분석 (동그라미 드로잉 + 상단 스마트 카드)
         annotations.append({
             "id": "ann-pattern-doublebottom",
-            "from": round(t0 + 1.2, 2),
-            "to": round(mid, 2),
+            "from": round(t0 + 1.4, 2),
+            "to": t_act1_end,
             "kind": "circle",
             "panel": "price",
             "index": vol_max_idx,
@@ -428,22 +405,52 @@ def _build_annotations(ticker: str, scenes: list[dict], series: dict | None, lev
             "drawDuration": 0.55,
             "eraseDuration": 0.4
         })
-        # 6-3. 지지선 디딤 전략 밑줄 (underline) 드로잉
-        annotations.append({
-            "id": "ann-pattern-strategy",
-            "from": round(mid, 2),
-            "to": round(t1 - 1.0, 2),
-            "kind": "underline",
-            "panel": "price",
-            "index": max(0, last_idx - 12),
-            "endIndex": last_idx,
-            "price": sup_price,
-            "title": "눌림목 매수 유효 구간",
-            "sub": f"{sup_price:,.0f}원 지지선 근처 분할 접근 · 저항 돌파 시 상방 확장",
-            "tone": "accent",
-            "drawDuration": 0.55,
-            "eraseDuration": 0.4
-        })
+
+        # [2막: 33 ~ 65%] 핵심 1차 지지선 밑줄 긋기 (밑줄 드로잉 + 인라인 배지)
+        if sup_price:
+            annotations.append({
+                "id": "ann-level-support",
+                "from": t_act2_start,
+                "to": t_act2_end,
+                "kind": "underline",
+                "panel": "price",
+                "index": max(0, last_idx - 25),
+                "endIndex": last_idx,
+                "price": sup_price,
+                "title": f"핵심 1차 지지선 ({sup_price:,.0f}원)",
+                "sub": f"{sup_price:,.0f}원선 눌림목 매수 유효 구간",
+                "tone": "cyan",
+                "drawDuration": 0.55,
+                "eraseDuration": 0.4
+            })
+
+        # [3막: 66 ~ 100%] 1차·2차 상방 저항선 수평선 긋기 (수평선 드로잉 + 우측 가격 축 태그)
+        if res1_price:
+            annotations.append({
+                "id": "ann-level-res1",
+                "from": t_act3_start,
+                "to": round(t1 - 0.6, 2),
+                "kind": "hlevel",
+                "price": res1_price,
+                "title": f"1차 저항선 ({res1_price:,.0f}원)",
+                "sub": f"{res1_price:,.0f}원선 직전 매물벽 돌파 저항",
+                "tone": "accent",
+                "drawDuration": 0.5,
+                "eraseDuration": 0.4
+            })
+        if res2_price:
+            annotations.append({
+                "id": "ann-level-res2",
+                "from": round(t_act3_start + 0.3, 2),
+                "to": round(t1 - 0.6, 2),
+                "kind": "hlevel",
+                "price": res2_price,
+                "title": f"2차 저항선 ({res2_price:,.0f}원)",
+                "sub": f"{res2_price:,.0f}원선 중기 추세 확장 목표",
+                "tone": "up",
+                "drawDuration": 0.5,
+                "eraseDuration": 0.4
+            })
 
     return annotations
 

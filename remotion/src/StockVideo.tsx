@@ -27,8 +27,8 @@ import { useChartCamera } from './components/useChartCamera';
 
 const BACKPAD_SAFE = '#0B1220';
 
-/** 차트 그리기에 쓸 시간(초). 이 시간이 지나면 완성된 그래프를 그대로 든다. */
-const CHART_DRAW_SECONDS = 5;
+/** 차트 그리기에 쓸 시간(초). 0.8초(24프레임) 만에 완성되어 어노테이션이 공백에 그려지는 문제를 방지한다. */
+const CHART_DRAW_SECONDS = 0.8;
 
 /** 파티클/그라디언트 배경 — 느린 시네마틱 드리프트 */
 const AnimatedBackdrop: React.FC<{ sectionProgress: number }> = ({ sectionProgress }) => {
@@ -314,8 +314,8 @@ const ScriptCaption: React.FC<{
 
     const fontSize = Math.round(width * 0.0165);
     const local = (t - activeSub.start) * fps;
-    const fade = interpolate(local, [0, 8], [0.3, 1], { extrapolateRight: 'clamp' });
-    const yRise = interpolate(local, [0, 8], [8, 0], { extrapolateRight: 'clamp' });
+    // 텍스트만 부드럽게 전환 (컨테이너 박스는 불투명 솔리드로 완전 고정하여 뒤 챠트봉 깜빡임 원천 차단)
+    const textFade = interpolate(local, [0, 4], [0.65, 1], { extrapolateRight: 'clamp' });
 
     return (
       <div
@@ -328,19 +328,16 @@ const ScriptCaption: React.FC<{
           justifyContent: 'center',
           padding: `0 ${Math.round(width * 0.05)}px`,
           pointerEvents: 'none',
-          opacity: fade,
-          transform: `translateY(${yRise}px)`,
         }}
       >
         <div
           style={{
-            background: 'rgba(11, 18, 32, 0.90)',
-            backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(255, 214, 10, 0.4)',
-            borderBottom: '2.5px solid #FFD60A',
+            background: 'rgba(11, 18, 32, 0.96)',
+            border: '1.5px solid rgba(255, 214, 10, 0.4)',
+            borderBottom: '3px solid #FFD60A',
             borderRadius: Math.round(width * 0.006),
             padding: `${Math.round(width * 0.0055)}px ${Math.round(width * 0.018)}px`,
-            boxShadow: '0 8px 36px rgba(0,0,0,0.85)',
+            boxShadow: '0 8px 36px rgba(0,0,0,0.92)',
             maxWidth: '82%',
             textAlign: 'center',
           }}
@@ -355,6 +352,7 @@ const ScriptCaption: React.FC<{
               letterSpacing: -0.6,
               wordBreak: 'keep-all',
               textShadow: '0 2px 14px rgba(0,0,0,0.95)',
+              opacity: textFade,
             }}
           >
             {activeSub.text}

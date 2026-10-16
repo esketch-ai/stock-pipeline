@@ -18,6 +18,20 @@ export const C = {
 export const FONT = 'Apple SD Gothic Neo, Pretendard, sans-serif';
 export const MONO = 'SF Mono, Menlo, monospace';
 
+export const isBrightColor = (c: string): boolean => {
+  const lower = (c || '').toLowerCase();
+  return (
+    lower.includes('ffd6') ||
+    lower.includes('ff95') ||
+    lower.includes('ffd7') ||
+    lower.includes('ffff') ||
+    lower === '#ffd60a' ||
+    lower === '#ff9500' ||
+    lower === '#00f0ff' ||
+    lower === '#30d158'
+  );
+};
+
 /** SVG 논리 해상도 — 실제 렌더 해상도와 무관하게 이 좌표계로 그린다. */
 export const VB = { w: 1920, h: 1080 } as const;
 
@@ -36,7 +50,7 @@ export const VB = { w: 1920, h: 1080 } as const;
  * 차트 안에서 제목을 또 그리지 않는다 — 헤드라인은 장면이 이미 말하고 있다.
  */
 export const PAD = {
-  left: 90,
+  left: 105,  // 좌측 6자리 가격 눈금(500,000 등) 잘림 방지 안전 여백
   right: 170, // 우측 가격 축 배지 및 수평선 태그 안전 마진 확보
   top: 175,   // 상단 헤드라인 바로 아래 (140px 뷰포트 시작, 175px 챠트 패널 시작)
   bottom: 150, // 하단 자막(970px) 위 (930px 챠트 패널 종료 — 높이 755px 극대화)

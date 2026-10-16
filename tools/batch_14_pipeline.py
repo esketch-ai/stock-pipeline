@@ -36,7 +36,6 @@ import facts
 import stage4_render
 import stage5_publish
 from logger import log
-from pykrx import stock
 
 # 14개 대상 종목 목록 (점수 순)
 DEFAULT_14_TICKERS = [
@@ -72,16 +71,65 @@ def save_progress(progress: dict) -> None:
     PROGRESS_FILE.write_text(json.dumps(progress, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def sanitize_text_for_tts(text: str) -> str:
+    """TTS 음성 합성 전용 텍스트 정제기.
+    
+    괄호, 영문 병기, 특수기호 등으로 인한 나레이션 불안 및 끊김 현상을 원천 방지합니다.
+    """
+    # 1. 한글 바로 뒤 영문 병기 괄호 완전 제거: e.g. 골든크로스(Golden Cross) -> 골든크로스
+    text = re.sub(r'([가-힣]+)\s*\([A-Za-z\s/_-]+\)', r'\1', text)
+    
+    # 2. 비율 표현 한글화: e.g. 2.47:1 -> 2.47대 1
+    text = re.sub(r'(\d+(?:\.\d+)?)\s*:\s*(\d+)', r'\1대 \2', text)
+    
+    # 3. 부호 및 퍼센트 한글화: +29.1% -> 플러스 29.1퍼센트, 110% -> 110퍼센트
+    text = re.sub(r'\+(\d+(?:\.\d+)?)%', r'플러스 \1퍼센트', text)
+    text = re.sub(r'-(\d+(?:\.\d+)?)%', r'마이너스 \1퍼센트', text)
+    text = re.sub(r'(\d+(?:\.\d+)?)%', r'\1퍼센트', text)
+    
+    # 4. 주요 투자 용어 및 영문 약어 발음화 (한국어 조사 결합 대응)
+    acronym_map = [
+        (r'F-Score', '에프 스코어'),
+        (r'M-Score', '엠 스코어'),
+        (r'POC', '피오씨'),
+        (r'W자형', '더블유자형'),
+        (r'BPS', '비피에스'),
+        (r'PBR', '피비알'),
+        (r'PER', '피이알'),
+        (r'ROE', '알오이'),
+        (r'ROIC', '알오아이씨'),
+        (r'WACC', '왝'),
+        (r'RSI', '알에스아이'),
+        (r'MACD', '엠에이씨디'),
+        (r'SMR', '에스엠알'),
+        (r'DCF', '디씨에프'),
+        (r'NCAV', '엔씨에이브이'),
+        (r'OHLCV', '오에이치엘씨브이'),
+        (r'EPC', '이피씨'),
+    ]
+    for pat, rep in acronym_map:
+        text = re.sub(rf'(?i){pat}(?=[은는이가을를의에로와과\s\.,\(\)\[\]]|$)', rep, text)
+    
+    # 5. 모든 괄호 안 텍스트를 자연스럽게 문장으로 흡수 (괄호 기호 완전 탈색)
+    # e.g. (1,924만 주) -> 1,924만 주, (670원) -> 670원
+    text = re.sub(r'[\(\[\{]([^\(\)\[\]\{\}]+)[\)\]\}]', r' \1 ', text)
+    text = text.replace('(', ' ').replace(')', ' ').replace('[', ' ').replace(']', ' ')
+    
+    # 6. 한국어 조사 앞 불필요한 띄어쓰기 결합 (자연스러운 발음)
+    text = re.sub(r'\s+([은는이가을를과와로의에])\b', r'\1', text)
+    
+    # 7. 문맥상 불필요한 특수문자 및 다중 공백 정리
+    text = re.sub(r'[·ㆍ/]', ' ', text)
+    text = re.sub(r'[\'\"`]', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
 def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
-    """실측 기술적 지표 및 수급 데이터 집계 (네이버 증권 서비스 우선 연동)."""
+    """실측 기술적 지표 및 수급 데이터 집계 (100% 네이버 증권 서비스 연동)."""
     series = chart_data.fetch_series_naver(ticker)
     if not series or not series.get("c"):
-        end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=280)).strftime("%Y%m%d")
-        df = stock.get_market_ohlcv_by_date(start_date, end_date, ticker)
-        series = chart_data.to_series(df)
-    if not series or not series.get("c"):
-        raise ValueError(f"{ticker} OHLCV 데이터를 불러올 수 없습니다.")
+        raise ValueError(f"{ticker} 네이버 증권 OHLCV 데이터를 불러올 수 없습니다.")
 
     levels = chart_data.support_resistance(series) or {}
     supply = chart_data.fetch_supply(ticker) or {}
@@ -137,6 +185,16 @@ def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
         levels=levels,
     )
 
+    # 주식 전문가용 종합 시장 평가성(Market Consensus & Valuation) 결합
+    import market_evaluation
+    try:
+        m_eval = market_evaluation.build_market_evaluation_report(ticker, name)
+    except Exception as e:
+        log.warning("시장 평가성 수집 실패(기본값 대체): %s", e)
+        m_eval = {}
+
+    frate_val = m_eval.get("foreign_ratio") or cp_eval.get("step0_anti_manipulation", {}).get("foreign_rate", 30.6)
+
     return {
         "ticker": ticker,
         "name": name,
@@ -174,112 +232,36 @@ def collect_stock_metrics(ticker: str, name: str) -> dict[str, Any]:
         "shares_to_buy": cp_eval["step4_trade"]["shares_to_buy"],
         "disparity_20": cp_eval["step2_market"]["disparity_20"],
         "cash_allocation_pct": cp_eval["step2_market"]["cash_allocation_pct"],
+        "market_cap_raw": cp_eval.get("step0_anti_manipulation", {}).get("market_cap_raw", ""),
+        "foreign_rate": frate_val,
+        "anti_verdict": cp_eval.get("step0_anti_manipulation", {}).get("verdict", ""),
+        "anti_passed": cp_eval.get("step0_anti_manipulation", {}).get("passed", True),
+        "market_eval": m_eval,
+        "target_price": m_eval.get("target_price"),
+        "upside_pct": m_eval.get("upside_pct"),
+        "foreign_ratio": frate_val,
+        "pbr": m_eval.get("pbr"),
+        "bps": m_eval.get("bps"),
+        "rsi": m_eval.get("rsi"),
+        "selection_headline": m_eval.get("headline"),
+        "selection_sub": m_eval.get("market_summary"),
+        "major_holder": m_eval.get("major_holder"),
+        "major_ratio": m_eval.get("major_ratio"),
+        "major_total_ratio": m_eval.get("major_total_ratio"),
+        "major_change_reason": m_eval.get("major_change_reason"),
+        "major_change_ratio": m_eval.get("major_change_ratio"),
+        "insider_buyer_count": m_eval.get("insider_buyer_count"),
+        "has_treasury_cancel": m_eval.get("has_treasury_cancel"),
     }
 
 
 def generate_7min_script(m: dict[str, Any]) -> list[dict[str, str]]:
-    """5대 지표 중심 8개 씬 대본 생성 (총 약 2,400~2,600자, 약 6.5~7분 분량)."""
+    """5대 지표 중심 8개 씬 대본 생성 (시장 평가성 기반, 탈클리셰 전문 스크립트)."""
     name = m["name"]
     ticker = m["ticker"]
 
-    # 0. Selection (종목 선정 배경 및 자본 보존형 분석)
-    f_score_val = m.get("f_score", 7)
-    rr_val = m.get("rr_ratio", 2.5)
-    safety_margin_val = m.get("margin_of_safety_pct", 46.9)
-    sec0_text = (
-        f"오늘 주차뿌까에서 긴급 타격 분석 종목으로 {name}을 선정한 데에는 워런 버핏의 제1원칙인 '절대로 돈을 잃지 마라'에 기반한 4단계 자본 보존형 방어 시스템의 엄격한 검증을 통과했기 때문입니다. "
-        f"첫째, {name}은 피오트로스키 F-Score {f_score_val}점을 기록하며 탄탄한 회계적 건전성과 현금 창출력을 입증했습니다. "
-        f"둘째, 세스 클라만의 안전마진 원칙에 따라 보수적 청산가치 대비 {m.get('safety_status', f'안전마진 {safety_margin_val:+.1f}%')}라는 확고한 하방 안전판을 갖추고 있습니다. "
-        f"셋째, 최근 바닥권에서 평소 거래량 대비 {m['vol_multiple']}배에 달하는 {m['max_vol'] / 10000:,.0f}만 주의 기록적인 거래량이 폭발하며 네이버 증권 최대 매물대 POC 벽을 강하게 돌파했습니다. "
-        f"넷째, 폴 튜더 존스의 원칙대로 스윙 로우 {m['sup']:,}원을 칼손절선으로 고정하고, 1차 저항선까지 {rr_val}:1의 비대칭 손익비가 확보되었습니다. "
-        f"과연 지금의 자리가 장기 복리를 지켜낼 결정적 변곡점일지, 캔들부터 수급, 거래량, 추세까지 5대 핵심 지표로 샅샅이 파헤쳐보겠습니다."
-    )
-
-    # 1. Hook (캔들스틱 분석)
-    sec1_text = (
-        f"가장 먼저 {name}의 일봉 차트를 펼쳐보면, 최근 가장 강렬했던 캔들 하나가 시선을 단숨에 사로잡습니다. "
-        f"바로 하루 만에 {m['c_open']:,}원에서 {m['c_close']:,}원까지 치솟으며 {m['chg_rate']:+.1f}%의 강력한 양봉을 뽑아냈던 거래일입니다. "
-        f"캔들의 몸통이 이처럼 길게 형성되었다는 것은 장 시작부터 마감까지 매수세가 시장을 압도적으로 지배했음을 의미합니다. "
-        f"하지만 고점 부근 {m['c_high']:,}원 선에서는 차익 실현을 노리는 강력한 매도벽에 부딪히며 윗꼬리가 형성되기도 했습니다. "
-        f"이후 캔들의 변동 폭이 점차 좁아지며 건전한 숨고르기 국면에 진입하고 있습니다. "
-        f"캔들의 몸통 크기와 꼬리의 길이는 단순한 수치가 아니라 매수자와 매도자가 치열하게 공방을 벌인 심리의 흔적입니다."
-    )
-
-    # 2. Setup (수급 분석)
-    f_stat = f"{abs(m['foreign_sum']):,.1f}억 원 순매수" if m['foreign_sum'] > 0 else f"{abs(m['foreign_sum']):,.1f}억 원 순매도"
-    r_stat = f"{abs(m['retail_sum']):,.1f}억 원 순매수" if m['retail_sum'] > 0 else f"{abs(m['retail_sum']):,.1f}억 원 순매도"
-    i_stat = f"{abs(m['inst_sum']):,.1f}억 원 순매수" if m['inst_sum'] > 0 else f"{abs(m['inst_sum']):,.1f}억 원 순매도"
-
-    sec2_text = (
-        f"캔들의 움직임 뒤에는 언제나 자금의 주체, 즉 수급이 자리하고 있습니다. "
-        f"최근 39거래일간의 누적 수급 데이터를 정밀 분석해보면 시장 참여자별로 명확한 시각 차이가 확인됩니다. "
-        f"외국인 투자자들은 {f_stat}를 기록하며 포지션을 조율했고, 개인 투자자들은 {r_stat}로 물량을 활발히 교환했습니다. "
-        f"여기에 기관 투자자는 {i_stat}의 흐름을 보이며 관망세와 지지선을 타진하고 있습니다. "
-        f"주가가 안정적인 2차 상승 랠리를 펼치기 위해서는 특정 주체의 단독 매수보다는 외국인과 기관의 쌍끌이 순매수 전환이 필수적입니다. "
-        f"수급의 균형추가 어느 방향으로 기울어지는지 체크하는 것이 핵심 관전 포인트입니다."
-    )
-
-    # 3. Reveal (거래량 폭발 분석 + 뉴스 매칭)
-    news_mention = f"특히 거래량이 번쩍 뜨며 폭발한 날에는 반드시 시장의 뉴스를 함께 살펴봐야 합니다. 실제로 {name}은 '{m['surge_news']}' 등의 이슈가 시장에 전해지며 " if m.get("surge_news") else "특히 거래량이 번쩍 뜨며 폭발한 날에는 시장의 매수세가 강하게 유입되며 "
-    sec3_text = (
-        f"이번 흐름에서 가장 눈여겨봐야 할 결정적인 시그널은 단연 거래량의 폭발이었습니다. "
-        f"주식 시장의 오랜 격언처럼, 주가는 속일 수 있어도 거래량은 결코 속일 수 없습니다. "
-        f"{news_mention}돌파 구간에서 터진 {m['max_vol'] / 10000:,.0f}만 주의 거래량은 평소 거래량 대비 {m['vol_multiple']}배에 달하는 기록적인 유동성을 보여주었습니다. "
-        f"이는 단순한 개인들의 매매가 아니라 신규 메이저 자금이 대거 유입되었음을 방증하는 신호탄입니다. "
-        f"특히 고무적인 점은, 최근 주가가 조정을 받을 때 거래량이 {m['last_vol'] / 10000:,.0f}만 주 수준으로 급감하며 전형적인 '거래량 마름' 현상을 보여준다는 사실입니다. "
-        f"거래량이 줄어들면서 가격이 지지된다는 것은 매수 주포가 아직 이탈하지 않았음을 뜻하는 건전한 눌림목 신호입니다."
-    )
-
-    # 4. Deep Dive (이동평균선 수렴/정렬)
-    sec4_text = (
-        f"이제 중기적인 추세의 방향을 가늠하기 위해 이동평균선의 배열을 들여다보겠습니다. "
-        f"현재 {name}의 5일 이동평균선은 {m['ma5']:,}원, 20일선은 {m['ma20']:,}원, 그리고 60일선은 {m['ma60']:,}원에 위치해 있습니다. "
-        f"단기 5일선이 중장기 이평선들을 차례로 상향 돌파하는 골든크로스를 형성한 이후, 세 선이 한곳으로 팽팽하게 좁혀지는 초밀집 수렴 국면에 놓여 있습니다. "
-        f"이평선이 이처럼 밀집했다는 것은 최근 60거래일 동안 시장 참여자들의 평균 매수 단가가 수렴했다는 의미입니다. "
-        f"수렴의 끝에서는 언제나 상방이든 하방이든 강력한 방향성 분출이 일어납니다. "
-        f"현재 주가가 20일 생명선 위에 안착해 있다는 점에서 상승 모멘텀의 불씨가 살아있음을 확인할 수 있습니다."
-    )
-
-    # 5. Risk (추세선 및 채널 분석)
-    sec5_text = (
-        f"하지만 시장은 늘 양면성을 지니고 있기에, 상승 채널과 함께 잠재적 리스크 요인도 냉정하게 분석해야 합니다. "
-        f"52주 최고점인 {m['high52']:,}원에서부터 내려오는 중기 하락 추세선의 상단 저항선이 여전히 주가의 머리를 누르고 있습니다. "
-        f"단기적으로는 저점을 완만하게 높여가는 상승 채널을 형성하고 있지만, 직전 고점 매물대를 단숨에 돌파하지 못한다면 채널 하단 지지선까지의 되밀림이 발생할 수 있습니다. "
-        f"단기 트레이딩 관점에서는 상승 채널의 하단 지지선 이탈 여부를 반드시 스탑로스 기준선으로 설정해야 합니다. "
-        f"기대 수익만을 바라보고 성급하게 진입하기보다는, 하방 지지력이 확인되는 구간에서 분할 매수로 접근하는 균형 잡힌 시각이 중요합니다."
-    )
-
-    # 6. Wisdom (차트 패턴 및 지지/저항 + 네이버 증권 매물 분석도)
-    poc_status = "상향 돌파하여 강력한 하방 지지벽을 형성한 상태" if m.get("is_above_poc") else "돌파를 목전에 두고 상단 매물벽 저항을 소화하는 국면"
-    sec6_text = (
-        f"차트 패턴의 관점에서 보면, 바닥권에서 W자형 이중 바닥 패턴을 완성한 뒤 넥라인을 돌파하는 상승 삼각형 수렴 형태가 나타나고 있습니다. "
-        f"특히 네이버 증권 보조지표인 매물대 분석도를 살펴보면, 가장 많은 거래량이 집중된 최대 매물벽이 {m.get('poc_price', m['sup']):,}원 부근에 두텁게 쌓여 있으며, "
-        f"현재 주가는 이 핵심 매물대를 {poc_status}입니다. "
-        f"구체적인 가격 기준을 설정해 보겠습니다. 아래로는 {m['sup']:,}원의 강력한 1차 지지선이 콘크리트처럼 받쳐주고 있으며, "
-        f"위쪽으로는 {m['res1']:,}원 부근에 직전 매물대 저항선이 형성되어 있습니다. "
-        f"만약 거래량을 동반하여 {m['res1']:,}원의 저항선을 확실하게 뚫어낸다면, 다음 타깃인 {m['res2']:,}원, 나아가 52주 고점 영역까지 상방 룸이 시원하게 열리게 됩니다. "
-        f"패턴 매매의 정석은 저항선 바로 밑에서 추격 매수하는 것이 아니라, {m['sup']:,}원 지지선 부근에서 하방 리스크를 통제하며 눌림목을 공략하는 전략입니다."
-    )
-
-    # 7. Outro (종합 분석 및 전략 요약)
-    sec7_text = (
-        f"지금까지 {name}의 캔들, 수급, 거래량 폭발, 이동평균선 정렬, 그리고 지지 저항 패턴까지 5대 기술적 지표를 종합 분석해 보았습니다. "
-        f"{m['vol_multiple']}배 폭발한 유동성과 골든크로스는 긍정적인 시그널이지만, {m['res1']:,}원의 매물벽 돌파 여부와 {m['sup']:,}원의 지지선 수호 여부를 면밀히 확인해야 합니다. "
-        f"차트는 미래를 예언하는 마법이 아니라, 이길 확률이 높은 자리를 찾아내고 손익비를 극대화하는 투자자의 나침반입니다. "
-        f"본 영상은 특정 종목의 매수나 매도를 권유하지 않으며, 모든 투자의 최종 판단과 결과에 대한 책임은 투자자 본인에게 있습니다."
-    )
-
-    sections = [
-        {"id": "selection", "title": "종목 선정 이유", "text": sec0_text},
-        {"id": "hook", "title": "캔들스틱 분석", "text": sec1_text},
-        {"id": "setup", "title": "수급 분석", "text": sec2_text},
-        {"id": "reveal", "title": "거래량 폭발 분석", "text": sec3_text},
-        {"id": "deep_dive", "title": "이동평균선 수렴/정렬", "text": sec4_text},
-        {"id": "risk", "title": "추세선 및 채널 분석", "text": sec5_text},
-        {"id": "wisdom", "title": "차트 패턴 및 지지/저항", "text": sec6_text},
-        {"id": "outro", "title": "종합 분석 및 전략 요약", "text": sec7_text},
-    ]
-    return sections
+    import market_evaluation
+    return market_evaluation.generate_market_evaluated_script(ticker, name)
 
 
 async def generate_voice_and_timestamps(ticker: str, full_text: str, sections: list[dict], force: bool = False) -> tuple[Path, list[dict], list[dict]]:
@@ -304,7 +286,9 @@ async def generate_voice_and_timestamps(ticker: str, full_text: str, sections: l
 
     if recreate_voice:
         log.info("%s 7분 아나운서 음성 합성 시작 (%d자, ko-KR-InJoonNeural)...", ticker, len(full_text))
-        comm = edge_tts.Communicate(full_text, "ko-KR-InJoonNeural", rate="+1%")
+        tts_text = sanitize_text_for_tts(full_text)
+        log.info("✔ TTS 음성 발음 최적화 완료 (%d자)", len(tts_text))
+        comm = edge_tts.Communicate(tts_text, "ko-KR-InJoonNeural", rate="+1%")
         await comm.save(str(voice_path))
         log.info("✔ %s 음성 합성 완료: %s", ticker, voice_path.name)
     else:
@@ -384,6 +368,12 @@ def build_props_and_manifest(m: dict[str, Any], sections: list[dict], voice_path
             "high_52w": f"{m['high52']:,}원",
             "change_rate": f"{m['chg_rate']:+.2f}%",
             "volume_ratio": f"{m['vol_multiple']}배",
+            "target_price": m.get("target_price"),
+            "upside_pct": m.get("upside_pct"),
+            "foreign_ratio": m.get("foreign_ratio"),
+            "pbr": m.get("pbr"),
+            "selection_headline": m.get("selection_headline"),
+            "selection_sub": m.get("selection_sub"),
         },
     }
 
@@ -503,13 +493,27 @@ def main() -> int:
     target_list = DEFAULT_14_TICKERS
     if args.tickers:
         wanted = [t.strip() for t in args.tickers.split(",") if t.strip()]
-        # 종목명 매핑 확장
         name_dict = {t: n for t, n in DEFAULT_14_TICKERS}
         name_dict.update({
+            "028260": "삼성물산",
             "005930": "삼성전자",
             "000660": "SK하이닉스",
+            "012330": "현대모비스",
+            "009540": "HD한국조선해양",
+            "066570": "LG전자",
+            "035420": "NAVER",
         })
-        target_list = [(t, name_dict.get(t, t)) for t in wanted]
+        targets = []
+        for t in wanted:
+            n = name_dict.get(t)
+            if not n:
+                try:
+                    import naver_finance
+                    n = naver_finance.fetch_stock_integration(t).get("name") or t
+                except Exception:
+                    n = t
+            targets.append((t, n))
+        target_list = targets
 
     log.info("총 %d개 종목 배치 시작 (step=%s, force=%s, no_upload=%s)", len(target_list), args.step, args.force, args.no_upload)
     render_video = args.step in ["all", "render"]

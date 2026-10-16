@@ -219,7 +219,7 @@ export const ChartPointer: React.FC<{ pointer: Pointer; width: number }> = ({
           position: 'absolute',
           left: r * 1.5,
           top: -Math.round(width * 0.014),
-          background: 'rgba(11,18,32,0.92)',
+          background: 'rgba(11, 18, 32, 0.60)',
           border: '1px solid rgba(255,214,10,0.55)',
           borderRadius: Math.round(width * 0.003),
           padding: `${Math.round(width * 0.0035)}px ${Math.round(width * 0.007)}px`,
@@ -273,7 +273,7 @@ export const EvidenceBanner: React.FC<{
     >
       <div
         style={{
-          background: 'rgba(11,18,32,0.86)',
+          background: 'rgba(11, 18, 32, 0.60)',
           backdropFilter: 'blur(14px)',
           border: '1px solid rgba(255,214,10,0.35)',
           borderLeft: `4px solid #FFD60A`,

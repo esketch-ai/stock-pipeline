@@ -1,6 +1,6 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig, Easing } from 'remotion';
-import { C, PAD, VB, stackPanels, type Panel } from '../charts/theme';
+import { C, PAD, VB, stackPanels, type Panel, type Rect } from '../charts/theme';
 import { scaleX, scaleY, type Series } from '../charts/scale';
 import { domainForPanel, valueForPanel, PANELS_OF } from '../charts/pointers';
 import type { ChartKind } from '../charts';
@@ -33,6 +33,20 @@ const TONE_COLORS: Record<AnnotationTone, string> = {
   purple: '#BF5AF2',  // 고점/추세 (Purple)
   cyan: '#00F0FF',    // 지지선/신호 (Neon Cyan)
   green: '#30D158',   // 성공/안착 (Green)
+};
+
+const isBrightColor = (c: string): boolean => {
+  const lower = (c || '').toLowerCase();
+  return (
+    lower.includes('ffd6') ||
+    lower.includes('ff95') ||
+    lower.includes('ffd7') ||
+    lower.includes('ffff') ||
+    lower === '#ffd60a' ||
+    lower === '#ff9500' ||
+    lower === '#00f0ff' ||
+    lower === '#30d158'
+  );
 };
 
 export const ChartAnnotationLayer: React.FC<{
@@ -69,7 +83,67 @@ export const ChartAnnotationLayer: React.FC<{
   const pulse = 1 + Math.sin(frame / 4.5) * 0.15;
   const invScale = 1 / (cameraScale || 1.0);
 
-  // 공통 콜아웃 설명 카드 렌더러
+  // 챠트 상단·하단 빈 공백 공간(Clean Shelves)에 설명 카드를 배치하여 캔들 가림을 원천 방지
+  const getShelfPlacement = (
+    targetXCenter: number,
+    targetYTop: number,
+    targetYBottom: number,
+    rect: Rect,
+    isVolumePanel = false
+  ) => {
+    const cardW = 380;
+    const cardH = 68;
+
+    // 배치 결정:
+    // 1) 볼륨 패널이면 볼륨 상단 쉘프에 배치
+    // 2) 타깃 캔들이 최상단(52주 최고점 등 targetYTop < rect.y + 140)이거나
+    //    타깃이 4-MA 범례 아래인 우측 영역(targetXCenter > rect.x + rect.w - 560 = 1190)에 위치할 때는
+    //    우측 하단 클린 쉘프(rect.y + rect.h - cardH - 14)에 배치하여 지시선이 화면을 가로지르지 않게 함
+    // 3) 그 외(좌측/중앙의 캔들)는 상단 클린 쉘프(rect.y + 14)에 배치
+    const isRightNearMa = targetXCenter > rect.x + rect.w - 580;
+    const isUpper = !isVolumePanel && targetYTop >= rect.y + 140 && !isRightNearMa;
+
+    let cardY = 0;
+    let cardX = 0;
+
+    if (isUpper) {
+      // 상단 클린 쉘프: rect.y + 14 (189px ~ 257px 영역)
+      // 캔들 최상단이 260px 이하이므로 캔들과 100% 비접촉
+      cardY = rect.y + 14;
+      // 좌측 네이버 증권 브랜드 로고(x ~ 330) 우측 및 우측 4-MA 범례(x >= 1190) 좌측 클린 공간
+      const minX = Math.round(rect.x + 235); // 105 + 235 = 340px
+      const maxX = Math.round(rect.x + rect.w - 565 - cardW); // 1750 - 565 - 380 = 805px
+      cardX = Math.max(minX, Math.min(maxX, Math.round(targetXCenter - cardW / 2)));
+    } else {
+      // 하단 클린 쉘프: 캔들 하단 또는 볼륨 패널 헤드룸
+      if (isVolumePanel) {
+        cardY = rect.y + 10;
+        cardX = Math.max(rect.x + 24, Math.min(rect.x + rect.w - cardW - 24, Math.round(targetXCenter - cardW / 2)));
+      } else {
+        cardY = rect.y + rect.h - cardH - 14;
+        cardX = Math.max(rect.x + 24, Math.min(rect.x + rect.w - cardW - 24, Math.round(targetXCenter - cardW / 2)));
+      }
+    }
+
+    const anchorX = targetXCenter;
+    const anchorY = isUpper ? targetYTop : targetYBottom;
+    const lineTargetX = Math.max(cardX + 36, Math.min(cardX + cardW - 36, targetXCenter));
+    const lineTargetY = isUpper ? cardY + cardH : cardY;
+
+    return {
+      cardX,
+      cardY,
+      cardW,
+      cardH,
+      targetX: lineTargetX,
+      targetY: lineTargetY,
+      anchorX,
+      anchorY,
+      isUpper,
+    };
+  };
+
+  // 공통 콜아웃 설명 카드 렌더러 (고대비 솔리드 다크 배경으로 뒤 챠트 투과 왜곡 차단)
   const renderCalloutCard = (
     ann: ChartAnnotation,
     color: string,
@@ -94,17 +168,17 @@ export const ChartAnnotationLayer: React.FC<{
           y={cardY}
           width={cardW}
           height={cardH}
-          rx={12}
+          rx={10}
           fill="rgba(11, 18, 32, 0.94)"
           stroke={color}
-          strokeWidth={2}
+          strokeWidth={1.8}
         />
-        <rect x={cardX} y={cardY} width={7} height={cardH} rx={3} fill={color} />
+        <rect x={cardX} y={cardY} width={6} height={cardH} rx={3} fill={color} />
         <text
-          x={cardX + 22}
-          y={cardY + 32}
+          x={cardX + 20}
+          y={cardY + 28}
           fill={color}
-          fontSize={18}
+          fontSize={16}
           fontWeight={900}
           fontFamily="Apple SD Gothic Neo, Pretendard, sans-serif"
         >
@@ -112,10 +186,10 @@ export const ChartAnnotationLayer: React.FC<{
         </text>
         {ann.sub && (
           <text
-            x={cardX + 22}
-            y={cardY + 58}
+            x={cardX + 20}
+            y={cardY + 50}
             fill="#E2E8F0"
-            fontSize={14}
+            fontSize={13}
             fontWeight={700}
             fontFamily="Apple SD Gothic Neo, Pretendard, sans-serif"
           >
@@ -224,16 +298,8 @@ export const ChartAnnotationLayer: React.FC<{
           const tipX = cx + rx * Math.cos(penAngle);
           const tipY = cy + ry * Math.sin(penAngle);
 
-          // 콜아웃 카드 배치
-          const isRightSide = cx > rect.x + rect.w * 0.62;
-          const cardW = 380;
-          const cardH = 78;
-          const cardX = isRightSide ? cx - cardW - rx - 24 : cx + rx + 24;
-          const cardY = Math.min(Math.max(rect.y + 12, cy - 40), VB.h - cardH - 120);
-          const anchorX = isRightSide ? cx - rx : cx + rx;
-          const anchorY = cy;
-          const targetX = isRightSide ? cardX + cardW : cardX;
-          const targetY = cardY + cardH / 2;
+          // 상·하단 빈 공백 클린 쉘프에 카드 배치 (캔들 가림 원천 방지)
+          const shelf = getShelfPlacement(cx, cy - ry, cy + ry, rect, targetPanel === 'volume');
 
           const cardAlpha = alpha * interpolate(drawProgress, [0.4, 0.85], [0, 1], {
             extrapolateLeft: 'clamp',
@@ -272,20 +338,23 @@ export const ChartAnnotationLayer: React.FC<{
                 </g>
               )}
 
-              {/* 콜아웃 지시선 */}
+              {/* 콜아웃 지시선 (타깃 캔들과 상단/하단 빈 공백 카드를 우아하게 연결) */}
               {cardAlpha > 0.05 && (
-                <path
-                  d={`M ${anchorX} ${anchorY} Q ${(anchorX + targetX) / 2} ${anchorY} ${targetX} ${targetY}`}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={2.5}
-                  strokeDasharray="5 3"
-                  opacity={0.85}
-                />
+                <g opacity={cardAlpha}>
+                  <path
+                    d={`M ${shelf.anchorX} ${shelf.anchorY} Q ${(shelf.anchorX + shelf.targetX) / 2} ${(shelf.anchorY + shelf.targetY) / 2} ${shelf.targetX} ${shelf.targetY}`}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={2.2}
+                    strokeDasharray="5 3"
+                    opacity={0.85}
+                  />
+                  <circle cx={shelf.targetX} cy={shelf.targetY} r={3.5} fill={color} />
+                </g>
               )}
 
               {/* 방송용 설명 카드 */}
-              {renderCalloutCard(ann, color, targetX, targetY, cardX, cardY, cardW, cardH, cardAlpha)}
+              {renderCalloutCard(ann, color, shelf.targetX, shelf.targetY, shelf.cardX, shelf.cardY, shelf.cardW, shelf.cardH, cardAlpha)}
             </g>
           );
         }
@@ -310,16 +379,7 @@ export const ChartAnnotationLayer: React.FC<{
           }
 
           const currentTipX = xStart + currentW;
-          const isRightSide = xStart > rect.x + rect.w * 0.62;
-          const cardW = 360;
-          const cardH = 74;
-          const cardX = isRightSide ? xStart - cardW - 20 : xStart;
-          const cardY = Math.min(Math.max(rect.y + 12, y + 24), VB.h - cardH - 120);
-
-          const cardAlpha = alpha * interpolate(drawProgress, [0.4, 0.85], [0, 1], {
-            extrapolateLeft: 'clamp',
-            extrapolateRight: 'clamp',
-          });
+          const badgeW = Math.min(340, ann.title.length * 15 + 36);
 
           return (
             <g key={ann.id} opacity={alpha}>
@@ -339,21 +399,31 @@ export const ChartAnnotationLayer: React.FC<{
                 <circle cx={currentTipX} cy={y} r={6} fill="#FFFFFF" filter="url(#ann-glow)" />
               )}
 
-              {/* 밑줄 아래 꼬리표 텍스트 */}
-              <text
-                x={xStart}
-                y={y + 22}
-                fill={color}
-                fontSize={15}
-                fontWeight={900}
-                fontFamily="Apple SD Gothic Neo, Pretendard, sans-serif"
-                opacity={drawProgress}
-              >
-                ▲ {ann.title}
-              </text>
-
-              {/* 콜아웃 카드 */}
-              {renderCalloutCard(ann, color, cardX, cardY, cardX, cardY, cardW, cardH, cardAlpha)}
+              {/* 밑줄 아래 고대비 인라인 배지 (중복 플로팅 카드를 제거하여 요소 겹침 방지) */}
+              {drawProgress > 0.25 && (
+                <g opacity={Math.min(1, drawProgress * 1.4)}>
+                  <rect
+                    x={xStart}
+                    y={y + 8}
+                    width={badgeW}
+                    height={28}
+                    rx={6}
+                    fill="rgba(11, 18, 32, 0.75)"
+                    stroke={color}
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={xStart + 12}
+                    y={y + 27}
+                    fill={color}
+                    fontSize={14}
+                    fontWeight={900}
+                    fontFamily="Apple SD Gothic Neo, Pretendard, sans-serif"
+                  >
+                    ▲ {ann.title}
+                  </text>
+                </g>
+              )}
             </g>
           );
         }
@@ -382,12 +452,8 @@ export const ChartAnnotationLayer: React.FC<{
           const xt = x1 + (x2 - x1) * drawProgress;
           const yt = y1 + (y2 - y1) * drawProgress;
 
-          // 시작점/끝점 펄스 원
-          const isRightSide = x2 > rect.x + rect.w * 0.62;
-          const cardW = 380;
-          const cardH = 78;
-          const cardX = isRightSide ? x2 - cardW - 24 : x2 + 24;
-          const cardY = Math.min(Math.max(rect.y + 12, y2 - 40), VB.h - cardH - 120);
+          // 상·하단 빈 공백 클린 쉘프에 카드 배치 (캔들 가림 원천 방지)
+          const shelf = getShelfPlacement(x2, Math.min(y1, y2), Math.max(y1, y2), rect, targetPanel === 'volume');
 
           const cardAlpha = alpha * interpolate(drawProgress, [0.5, 0.9], [0, 1], {
             extrapolateLeft: 'clamp',
@@ -426,8 +492,23 @@ export const ChartAnnotationLayer: React.FC<{
                 </g>
               )}
 
+              {/* 콜아웃 지시선 (추세선 끝점과 상단/하단 빈 공백 카드를 우아하게 연결) */}
+              {cardAlpha > 0.05 && (
+                <g opacity={cardAlpha}>
+                  <path
+                    d={`M ${shelf.anchorX} ${shelf.anchorY} Q ${(shelf.anchorX + shelf.targetX) / 2} ${(shelf.anchorY + shelf.targetY) / 2} ${shelf.targetX} ${shelf.targetY}`}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={2.2}
+                    strokeDasharray="5 3"
+                    opacity={0.85}
+                  />
+                  <circle cx={shelf.targetX} cy={shelf.targetY} r={3.5} fill={color} />
+                </g>
+              )}
+
               {/* 콜아웃 카드 */}
-              {renderCalloutCard(ann, color, x2, y2, cardX, cardY, cardW, cardH, cardAlpha)}
+              {renderCalloutCard(ann, color, shelf.targetX, shelf.targetY, shelf.cardX, shelf.cardY, shelf.cardW, shelf.cardH, cardAlpha)}
             </g>
           );
         }
@@ -439,9 +520,12 @@ export const ChartAnnotationLayer: React.FC<{
           const y = py(ann.price);
           const totalW = priceRect.w;
           const currentW = totalW * drawProgress;
-          const tagW = 152;
-          const tagH = 32;
-          const tagX = priceRect.x + priceRect.w + 6;
+          const tagLabel = ann.title.includes('원')
+            ? ann.title.replace(/\s*\([\d,]+원\)/, ` ${ann.price.toLocaleString()}원`)
+            : `${ann.title} ${ann.price.toLocaleString()}원`;
+          const tagW = 156;
+          const tagH = 30;
+          const tagX = priceRect.x + priceRect.w + 4;
           const tagY = y - tagH / 2;
 
           const tagScale = spring({
@@ -477,14 +561,14 @@ export const ChartAnnotationLayer: React.FC<{
                   />
                   <text
                     x={tagX + tagW / 2}
-                    y={tagY + 21}
-                    fill="#FFFFFF"
-                    fontSize={14}
+                    y={tagY + 20}
+                    fill={isBrightColor(color) ? '#0D1117' : '#FFFFFF'}
+                    fontSize={13}
                     fontWeight={900}
                     textAnchor="middle"
                     fontFamily="SF Mono, Menlo, monospace"
                   >
-                    {ann.title} {ann.price.toLocaleString()}원
+                    {tagLabel}
                   </text>
                 </g>
               )}
@@ -517,16 +601,8 @@ export const ChartAnnotationLayer: React.FC<{
             boxH = Math.max(24, volRect.y + volRect.h - yTop + 6);
           }
 
-          const isRightSide = cx > rect.x + rect.w * 0.62;
-          const cardW = 380;
-          const cardH = 78;
-          const cardX = isRightSide ? cx - cardW - 36 : cx + barW / 2 + 36;
-          const cardY = Math.min(Math.max(rect.y + 12, boxY - 32), VB.h - cardH - 120);
-
-          const anchorX = isRightSide ? boxX : boxX + barW;
-          const anchorY = boxY + boxH * 0.4;
-          const targetX = isRightSide ? cardX + cardW : cardX;
-          const targetY = cardY + cardH / 2;
+          // 상·하단 빈 공백 클린 쉘프에 카드 배치 (캔들 가림 원천 방지)
+          const shelf = getShelfPlacement(cx, boxY, boxY + boxH, rect, targetPanel === 'volume');
 
           // 박스 둘레
           const perimeter = 2 * (barW + boxH);
@@ -556,18 +632,22 @@ export const ChartAnnotationLayer: React.FC<{
               <circle cx={cx} cy={boxY} r={14 * pulse} fill="none" stroke={color} strokeWidth={2.8} />
               <circle cx={cx} cy={boxY} r={5} fill={color} />
 
+              {/* 콜아웃 지시선 (캔들과 상단/하단 빈 공백 카드를 우아하게 연결) */}
               {cardAlpha > 0.05 && (
-                <path
-                  d={`M ${anchorX} ${anchorY} Q ${(anchorX + targetX) / 2} ${anchorY} ${targetX} ${targetY}`}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={2.5}
-                  strokeDasharray="5 3"
-                  opacity={0.85}
-                />
+                <g opacity={cardAlpha}>
+                  <path
+                    d={`M ${shelf.anchorX} ${shelf.anchorY} Q ${(shelf.anchorX + shelf.targetX) / 2} ${(shelf.anchorY + shelf.targetY) / 2} ${shelf.targetX} ${shelf.targetY}`}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={2.2}
+                    strokeDasharray="5 3"
+                    opacity={0.85}
+                  />
+                  <circle cx={shelf.targetX} cy={shelf.targetY} r={3.5} fill={color} />
+                </g>
               )}
 
-              {renderCalloutCard(ann, color, targetX, targetY, cardX, cardY, cardW, cardH, cardAlpha)}
+              {renderCalloutCard(ann, color, shelf.targetX, shelf.targetY, shelf.cardX, shelf.cardY, shelf.cardW, shelf.cardH, cardAlpha)}
             </g>
           );
         }
@@ -582,14 +662,8 @@ export const ChartAnnotationLayer: React.FC<{
           if (!scaleFunc || val === null) return null;
 
           const cy = scaleFunc(val);
-          const isRightSide = cx > rect.x + rect.w * 0.62;
-          const cardW = 380;
-          const cardH = 78;
-          const cardX = isRightSide ? cx - cardW - 36 : cx + 36;
-          const cardY = Math.min(Math.max(rect.y + 12, cy - 40), VB.h - cardH - 120);
-
-          const targetX = isRightSide ? cardX + cardW : cardX;
-          const targetY = cardY + cardH / 2;
+          // 상·하단 빈 공백 클린 쉘프에 카드 배치 (캔들 가림 원천 방지)
+          const shelf = getShelfPlacement(cx, cy - 12, cy + 12, rect, targetPanel === 'volume');
 
           const cardAlpha = alpha * interpolate(drawProgress, [0.3, 0.75], [0, 1], {
             extrapolateLeft: 'clamp',
@@ -601,18 +675,22 @@ export const ChartAnnotationLayer: React.FC<{
               <circle cx={cx} cy={cy} r={18 * pulse * drawProgress} fill="none" stroke={color} strokeWidth={3} filter="url(#ann-glow)" />
               <circle cx={cx} cy={cy} r={6 * drawProgress} fill={color} />
 
+              {/* 콜아웃 지시선 (포인터 핀과 상단/하단 빈 공백 카드를 우아하게 연결) */}
               {cardAlpha > 0.05 && (
-                <path
-                  d={`M ${cx} ${cy} Q ${(cx + targetX) / 2} ${cy} ${targetX} ${targetY}`}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={2.5}
-                  strokeDasharray="5 3"
-                  opacity={0.85}
-                />
+                <g opacity={cardAlpha}>
+                  <path
+                    d={`M ${shelf.anchorX} ${shelf.anchorY} Q ${(shelf.anchorX + shelf.targetX) / 2} ${(shelf.anchorY + shelf.targetY) / 2} ${shelf.targetX} ${shelf.targetY}`}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={2.2}
+                    strokeDasharray="5 3"
+                    opacity={0.85}
+                  />
+                  <circle cx={shelf.targetX} cy={shelf.targetY} r={3.5} fill={color} />
+                </g>
               )}
 
-              {renderCalloutCard(ann, color, targetX, targetY, cardX, cardY, cardW, cardH, cardAlpha)}
+              {renderCalloutCard(ann, color, shelf.targetX, shelf.targetY, shelf.cardX, shelf.cardY, shelf.cardW, shelf.cardH, cardAlpha)}
             </g>
           );
         }

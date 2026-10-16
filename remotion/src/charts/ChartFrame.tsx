@@ -21,6 +21,7 @@ type Props = {
   /** 지금까지 공개된 봉 수 — 축 눈금도 이에 맞춰 움직인다 */
   count: number;
   progress: number;
+  title?: string;
   children?: React.ReactNode;
 };
 
@@ -34,6 +35,7 @@ export const ChartFrame: React.FC<Props> = ({
   formatters,
   count,
   progress,
+  title,
   children,
 }) => {
   const n = series.c.length;
@@ -70,6 +72,59 @@ export const ChartFrame: React.FC<Props> = ({
         />
       ))}
 
+      {/* 네이버 증권 공식 브랜드 헤더 (상단 좌측) */}
+      <g opacity={panelIn}>
+        <rect
+          x={rects[panels[0]].x + 16}
+          y={rects[panels[0]].y + 14}
+          width={24}
+          height={24}
+          rx={4}
+          fill="#03C75A"
+        />
+        <text
+          x={rects[panels[0]].x + 28}
+          y={rects[panels[0]].y + 31}
+          textAnchor="middle"
+          fill="#FFFFFF"
+          fontSize={15}
+          fontWeight={900}
+          fontFamily="system-ui, -apple-system, sans-serif"
+        >
+          N
+        </text>
+        <text
+          x={rects[panels[0]].x + 48}
+          y={rects[panels[0]].y + 32}
+          fill="#FFFFFF"
+          fontSize={18}
+          fontWeight={800}
+          fontFamily={FONT}
+          letterSpacing={0.4}
+        >
+          NAVER 증권
+        </text>
+        <text
+          x={rects[panels[0]].x + 158}
+          y={rects[panels[0]].y + 32}
+          fill="#5A667A"
+          fontSize={15}
+          fontFamily={FONT}
+        >
+          |
+        </text>
+        <text
+          x={rects[panels[0]].x + 172}
+          y={rects[panels[0]].y + 32}
+          fill="#A1A7B4"
+          fontSize={15}
+          fontFamily={FONT}
+          fontWeight={600}
+        >
+          {title ?? '일봉 매물대 차트'}
+        </text>
+      </g>
+
       {/* 가로 그리드 + Y 눈금 */}
       {panels.map((p) => {
         const rect = rects[p];
@@ -93,11 +148,12 @@ export const ChartFrame: React.FC<Props> = ({
                   strokeWidth={1.5}
                 />
                 <text
-                  x={rect.x - 14}
-                  y={y(t) + 8}
+                  x={rect.x - 12}
+                  y={y(t) + 6}
                   textAnchor="end"
                   fill={C.dim}
-                  fontSize={22}
+                  fontSize={18}
+                  fontWeight={600}
                   fontFamily={FONT}
                 >
                   {fmt(t)}

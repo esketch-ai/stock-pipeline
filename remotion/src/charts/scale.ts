@@ -17,6 +17,22 @@ export type Series = {
   ma5?: (number | null)[];
   ma20?: (number | null)[];
   ma60?: (number | null)[];
+  ma120?: (number | null)[];
+  v_ma20?: (number | null)[];
+  volume_profile?: {
+    zones?: Array<{
+      price_min: number;
+      price_max: number;
+      price_mid: number;
+      volume: number;
+      pct: number;
+    }>;
+    poc_price?: number;
+    poc_pct?: number;
+    support_zone?: number;
+    resistance_zone?: number;
+    is_above_poc?: boolean;
+  };
   rsi?: (number | null)[];
   ret?: (number | null)[];
   /** 주목할 봉의 인덱스 (cues.py 가 소비) */
@@ -91,7 +107,7 @@ export const extentOf = (
     const n = Math.min(count, arr.length);
     for (let i = 0; i < n; i++) {
       const v = arr[i];
-      if (!num(v)) continue;
+      if (!num(v) || v <= 0) continue;
       if (v < min) min = v;
       if (v > max) max = v;
     }

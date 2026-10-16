@@ -73,6 +73,7 @@ export const SupplyChart: React.FC<{ supply: Supply; progress: number }> = ({
       formatters={{ volume: (v) => `${v >= 0 ? '' : ''}${v.toFixed(0)}억` }}
       count={shown}
       progress={progress}
+      title="투자자별 매매동향 (외인·기관·개인)"
     >
       {/* 0선 — 누적 수급의 분기점 */}
       <line
@@ -125,19 +126,19 @@ export const SupplyChart: React.FC<{ supply: Supply; progress: number }> = ({
         );
       })}
 
-      {/* 범례 — 위쪽, 나열만 */}
+      {/* 범례 — 상단 우측 내부 정렬 */}
       <g opacity={interpolate(progress, [0.35, 0.6], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })}>
         {totals.map((t, i) => (
-          <g key={t.key} transform={`translate(${rect.x + i * 300}, ${legendY})`}>
-            <line x1={0} y1={0} x2={46} y2={0} stroke={t.color} strokeWidth={5} />
-            <text x={60} y={9} fill={C.fg} fontSize={26} fontWeight={700} fontFamily={FONT}>
+          <g key={t.key} transform={`translate(${rect.x + 420 + i * 220}, ${rect.y + 30})`}>
+            <circle cx={0} cy={-5} r={5} fill={t.color} />
+            <text x={12} y={0} fill={C.fg} fontSize={16} fontWeight={700} fontFamily={FONT}>
               {t.label}
             </text>
             <text
-              x={60 + 62}
-              y={9}
+              x={64}
+              y={0}
               fill={t.total >= 0 ? '#FF453A' : '#0A84FF'}
-              fontSize={26}
+              fontSize={16}
               fontWeight={800}
               fontFamily={MONO}
             >

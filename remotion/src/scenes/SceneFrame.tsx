@@ -84,19 +84,21 @@ export const SceneHeadline: React.FC<{
         </div>
       </div>
 
-      {/* 헤드라인 — 화면이 말할 한 문장 (컴팩트 고화질 방송 타이포그래피) */}
+      {/* 헤드라인 — 화면이 말할 한 문장 (컴팩트 고화질 방송 타이포그래피, 1줄 엄격 제한으로 네이버 로고 간섭 원천 차단) */}
       <div
         style={{
           position: 'relative',
           marginTop: 10,
           color: '#FFFFFF',
-          fontSize: 48,
+          fontSize: 44,
           fontWeight: 800,
           lineHeight: 1.15,
-          letterSpacing: -1.6,
+          letterSpacing: -1.4,
           textShadow: '0 6px 32px rgba(0,0,0,0.55)',
-          maxWidth: '58%',
+          maxWidth: '56%',
+          whiteSpace: 'nowrap',
           overflow: 'hidden',
+          textOverflow: 'ellipsis',
         }}
       >
         {scene.headline}
@@ -104,7 +106,19 @@ export const SceneHeadline: React.FC<{
       </div>
 
       {scene.sub ? (
-        <div style={{ marginTop: 8, color: '#8FA3C8', fontSize: 22, fontWeight: 600, letterSpacing: -0.4, maxWidth: '58%' }}>
+        <div
+          style={{
+            marginTop: 8,
+            color: '#8FA3C8',
+            fontSize: 20,
+            fontWeight: 600,
+            letterSpacing: -0.4,
+            maxWidth: '56%',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
           {scene.sub}
         </div>
       ) : null}

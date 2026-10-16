@@ -38,8 +38,8 @@ _KOREAN_COLUMNS = {
     "거래량": "v",
 }
 
-# 이동평균 — charts_extended 의 mav=(5, 20, 60) 와 동일하게 맞춘다
-_MA_WINDOWS = (("ma5", 5), ("ma20", 20), ("ma60", 60))
+# 이동평균 — 네이버 증권 기준 (5일, 20일, 60일, 120일)
+_MA_WINDOWS = (("ma5", 5), ("ma20", 20), ("ma60", 60), ("ma120", 120))
 _RSI_WINDOW = 14
 
 
@@ -133,6 +133,7 @@ def to_series(hist, max_bars: int = MAX_BARS) -> dict[str, Any] | None:
     ma: dict[str, list[float | None]] = {}
     for key, window in _MA_WINDOWS:
         ma[key] = _round_list(close.rolling(window).mean())
+    ma["v_ma20"] = _round_list(volume.rolling(20).mean(), 0)
 
     base = close.iloc[0]
     ret = _round_list((close / base - 1) * 100) if base else [None] * len(df)
@@ -148,6 +149,13 @@ def to_series(hist, max_bars: int = MAX_BARS) -> dict[str, Any] | None:
         "ret": ret,
     }
     series.update(ma)
+
+    # 네이버 증권 매물대 분석도 (Volume Profile) 결합
+    try:
+        import naver_finance
+        series["volume_profile"] = naver_finance.calculate_volume_profile(series)
+    except Exception as exc:
+        log.debug("volume_profile 첨부 실패: %s", exc)
 
     # 포인터 좌표는 여기서 "어느 봉인가" 만 정해 둔다.
     # 정확한 x/y 는 Remotion 이 각 차트의 스케일로 계산한다
@@ -240,31 +248,6 @@ def fetch_supply(ticker: str, days: int = 60, end: str | None = None) -> dict[st
             }
     except Exception as exc:
         log.debug("네이버 수급 조회 실패 %s: %s", ticker, exc)
-
-    try:
-        from pykrx import stock
-        import screening as _scr
-
-        end = end or _scr.last_trading_day(stock)
-        start = (datetime.strptime(end, "%Y%m%d") - timedelta(days=days)).strftime("%Y%m%d")
-        df = stock.get_market_trading_value_by_date(start, end, ticker)
-        if df is not None and len(df) >= 3:
-            df = df.drop(columns=["전체"], errors="ignore").fillna(0)
-
-            def col(name: str) -> list[float]:
-                if name not in df.columns:
-                    return [0.0] * len(df)
-                return [round(float(v) / 1e8, 2) for v in df[name]]
-
-            return {
-                "d": [d.strftime("%Y-%m-%d") for d in df.index],
-                "institution": col("기관합계"),
-                "retail": col("개인"),
-                "foreign": col("외국인합계"),
-                "other": col("기타법인"),
-            }
-    except Exception as exc:
-        log.debug("pykrx 수급 조회 실패 %s: %s", ticker, exc)
 
     return None
 

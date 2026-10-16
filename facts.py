@@ -173,54 +173,7 @@ def collect(ticker: str, name: str, market: str = "KOSPI", hist=None,
 
             return facts
     except Exception as exc:
-        log.debug("네이버 팩트 수집 실패 %s: %s (pykrx 폴백)", ticker, exc)
-
-    # 2. 폴백: pykrx
-    try:
-        from pykrx import stock
-
-        basic = _safe(lambda: stock.get_market_ticker_name(ticker), label="name")
-        if basic:
-            facts["name"] = basic
-
-        tday = _safe(
-            lambda: stock.get_nearest_business_day_in_a_week(
-                datetime.now().strftime("%Y%m%d"), prev=True),
-            label="trading_day")
-        facts["trading_day"] = tday
-
-        # 차트와 동일한 기간/동일한 adjusted 기준의 시세
-        series = hist if (hist is not None and len(hist)) else _safe(
-            lambda: _fetch_history(stock, ticker, tday, history_days), label="history")
-
-        if series is not None and len(series):
-            last = series.iloc[-1]
-            cur = float(last["종가"])
-            facts["close"] = _fmt_price(cur)
-            facts["close_raw"] = cur
-            if len(series) > 1:
-                prev_close = float(series["종가"].iloc[-2])
-                chg = (cur / prev_close - 1) * 100 if prev_close else 0.0
-                facts["change_rate"] = f"{chg:+.2f}%"
-                facts["change_raw"] = chg
-            hi = float(series["고가"].max())
-            lo = float(series["저가"].min())
-            pos = (cur - lo) / (hi - lo) * 100 if hi > lo else 50
-            facts["high_52w"] = _fmt_price(hi)
-            facts["low_52w"] = _fmt_price(lo)
-            facts["range_pos"] = f"{pos:.0f}%"
-            facts["from_high"] = f"{(cur / hi - 1) * 100:.1f}%"
-            facts["range_days"] = len(series)
-
-        snap = _safe(
-            lambda: stock.get_market_ohlcv_by_ticker(tday, market=market), label="snapshot")
-        if snap is not None and ticker in snap.index and len(snap):
-            facts["market_cap"] = _fmt_int(snap.loc[ticker].get("시가총액"))
-
-        if not facts["news"]:
-            facts["news"] = _naver_news(ticker, name)
-    except Exception as exc:
-        log.warning("pykrx 팩트 수집 실패 %s: %s", ticker, exc)
+        log.debug("네이버 팩트 수집 실패 %s: %s", ticker, exc)
 
     return facts
 

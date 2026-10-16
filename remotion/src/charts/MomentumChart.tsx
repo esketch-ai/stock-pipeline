@@ -69,6 +69,7 @@ export const MomentumChart: React.FC<{
       formatters={{ price: fmtPrice }}
       count={count}
       progress={progress}
+      title="모멘텀 및 과열/침체 지표 (RSI 14)"
     >
       {/* 가격 영역 채움 */}
       <path

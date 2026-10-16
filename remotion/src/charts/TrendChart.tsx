@@ -47,13 +47,14 @@ export const TrendChart: React.FC<{
 
   const lines: LineDef[] = [
     { key: 'close', label: '종가', values: series.c, color: C.accent, width: 3.5, start: 0.1, dur: 0.45 },
-    { key: 'ma60', label: '60일', values: series.ma60 ?? [], color: C.purple, width: 2.5, start: 0.34, dur: 0.34 },
-    { key: 'ma20', label: '20일', values: series.ma20 ?? [], color: C.down, width: 2.5, start: 0.48, dur: 0.32 },
-    { key: 'ma5', label: '5일', values: series.ma5 ?? [], color: C.up, width: 2.5, start: 0.6, dur: 0.3 },
+    { key: 'ma120', label: '120일', values: series.ma120 ?? [], color: '#BF5AF2', width: 2.2, start: 0.22, dur: 0.35 },
+    { key: 'ma60', label: '60일', values: series.ma60 ?? [], color: '#0A84FF', width: 2.2, start: 0.34, dur: 0.34 },
+    { key: 'ma20', label: '20일', values: series.ma20 ?? [], color: '#FF9500', width: 2.5, start: 0.48, dur: 0.32 },
+    { key: 'ma5', label: '5일', values: series.ma5 ?? [], color: '#FF3B30', width: 2.5, start: 0.6, dur: 0.3 },
   ];
 
   const domain = extentOf(
-    [series.c, series.ma5 ?? [], series.ma20 ?? [], series.ma60 ?? []],
+    [series.c, series.ma5 ?? [], series.ma20 ?? [], series.ma60 ?? [], series.ma120 ?? []],
     count,
     0.08
   );
@@ -78,6 +79,7 @@ export const TrendChart: React.FC<{
       formatters={{ price: fmtPrice }}
       count={count}
       progress={progress}
+      title="이동평균선 추세 분석"
     >
       {lines.map((l) => {
         const t = segment(progress, l.start, l.dur);

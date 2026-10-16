@@ -80,6 +80,41 @@ def normalize_numbers_in_text(text: str) -> str:
     return re.sub(pattern, _round, text)
 
 
+def clean_parentheses_for_tts(text: str) -> str:
+    """TTS 낭독 시 불안한 괄호 문자를 자연스러운 한국어 구어체로 정제."""
+    if not text:
+        return text
+    # 1. (+), (-) 기호 처리
+    text = re.sub(r"\(\+\)", " 플러스 ", text)
+    text = re.sub(r"\(-\)", " 마이너스 ", text)
+    # 2. 부호 붙은 수치 (예: +85% -> 플러스 85%)
+    text = re.sub(r"\+(\d+)", r"플러스 \1", text)
+    text = re.sub(r"-(\d+)", r"마이너스 \1", text)
+    # 3. 괄호 안의 영문 약어 한글 발음으로 변환
+    acronym_map = {
+        "PBR": "피비알",
+        "PER": "피이알",
+        "BPS": "비피에스",
+        "EPS": "이피에스",
+        "ROE": "알오이",
+        "ROIC": "알오아이씨",
+        "RSI": "알에스아이",
+        "POC": "피오씨",
+        "MACD": "엠에이씨디",
+        "SMR": "에스엠알",
+        "WACC": "더블유에이씨씨",
+        "FCF": "에프씨에프",
+        "IR": "아이알",
+    }
+    for ac, kr in acronym_map.items():
+        text = re.sub(rf"\b{ac}\b", kr, text)
+    # 4. 괄호 기호 자체 제거 (발화 단절 및 괄호 열고/닫고 낭독 방지)
+    text = re.sub(r"\(|\)", " ", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
+
+
 def polish_for_speech(text: str) -> str:
-    """발화용 텍스트 최종 정리: 띄어쓰기 + 수치 정규화."""
-    return normalize_numbers_in_text(clean_korean(text))
+    """발화용 텍스트 최종 정리: 괄호 정제 + 띄어쓰기 + 수치 정규화."""
+    cleaned = clean_parentheses_for_tts(text)
+    return normalize_numbers_in_text(clean_korean(cleaned))

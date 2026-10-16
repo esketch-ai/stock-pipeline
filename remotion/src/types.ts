@@ -56,6 +56,22 @@ export type SeriesPayload = {
   ma5?: (number | null)[];
   ma20?: (number | null)[];
   ma60?: (number | null)[];
+  ma120?: (number | null)[];
+  v_ma20?: (number | null)[];
+  volume_profile?: {
+    zones?: Array<{
+      price_min: number;
+      price_max: number;
+      price_mid: number;
+      volume: number;
+      pct: number;
+    }>;
+    poc_price?: number;
+    poc_pct?: number;
+    support_zone?: number;
+    resistance_zone?: number;
+    is_above_poc?: boolean;
+  };
   rsi?: (number | null)[];
   ret?: (number | null)[];
   pts?: Record<string, number>;
