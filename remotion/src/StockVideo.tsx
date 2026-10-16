@@ -25,6 +25,8 @@ import { DustMotes, FilmGrain, PulseGlow, ScaleLayer, SceneWipe, Vignette } from
 import { ChartAnnotationLayer, type ChartAnnotation } from './components/ChartAnnotationLayer';
 import { useChartCamera } from './components/useChartCamera';
 import { HeroIntroOverlay } from './components/HeroIntroOverlay';
+import { BroadcastingVfxLayer } from './components/BroadcastingVfxLayer';
+import type { LevelPayload } from './types';
 
 const BACKPAD_SAFE = '#0B1220';
 
@@ -297,6 +299,108 @@ const buildPhrases = (words: WordTimestamp[]): Phrase[] => {
   return phrases;
 };
 
+/**
+ * 방송국 30년 수석 자막 타이포그래피 렌더러
+ * - 숫자/금액/비율/기간: #FFD60A (골드 네온)
+ * - 리스크/안전벨트/손절선/매도/위험: #FF453A (레드 네온)
+ * - 핵심 비유 (체온계, 방패벽, 알짜 순재산 등): #64D2FF (민트 네온)
+ * - 모멘텀/돌파/반등/순매수: #30D158 (에메랄드 그린)
+ * - 채널 슬로건 / 브랜드: #FF9F0A (네온 앰버)
+ */
+export const renderBroadcastingStyledText = (text: string): React.ReactNode => {
+  if (!text) return null;
+
+  const regex =
+    /([+-]?\d+(?:,\d+)*(?:\.\d+)?(?:%|퍼센트|원|조|억|만|배|선|일|거래일|단|차)?)|(안전벨트|스탑로스|손절선|손절|위험|리스크|투매|순매도|매도군|윗꼬리)|(체온계|방패벽|방패|최대 격전지|알짜 순재산|바겐세일|주머니 사정|콘크리트 안전판|콘크리트|생명선|영수증|전쟁의 기록|스마트머니|상방 고속도로|비대칭 손익비|이동평균선|알에스아이|비피에스|피비알|피오씨|POC|BPS|PBR|RSI)|(매수군|순매수|골든크로스|장대양봉|돌파|반등|급등|매수세|적정 목표주가|상승 여력)|(주식 챠트를 뿌셔 보까|주차뿌까|뿌셔 보까|뿌셔)/g;
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+
+    const matchedStr = match[0];
+    if (match[1]) {
+      parts.push(
+        <span
+          key={match.index}
+          style={{
+            color: '#FFD60A',
+            fontWeight: 900,
+            textShadow: '0 0 14px rgba(255, 214, 10, 0.75)',
+            letterSpacing: 0.2,
+          }}
+        >
+          {matchedStr}
+        </span>
+      );
+    } else if (match[2]) {
+      parts.push(
+        <span
+          key={match.index}
+          style={{
+            color: '#FF453A',
+            fontWeight: 900,
+            textShadow: '0 0 14px rgba(255, 69, 58, 0.75)',
+          }}
+        >
+          {matchedStr}
+        </span>
+      );
+    } else if (match[3]) {
+      parts.push(
+        <span
+          key={match.index}
+          style={{
+            color: '#64D2FF',
+            fontWeight: 900,
+            textShadow: '0 0 14px rgba(100, 210, 255, 0.75)',
+          }}
+        >
+          {matchedStr}
+        </span>
+      );
+    } else if (match[4]) {
+      parts.push(
+        <span
+          key={match.index}
+          style={{
+            color: '#30D158',
+            fontWeight: 900,
+            textShadow: '0 0 14px rgba(48, 209, 88, 0.75)',
+          }}
+        >
+          {matchedStr}
+        </span>
+      );
+    } else if (match[5]) {
+      parts.push(
+        <span
+          key={match.index}
+          style={{
+            color: '#FF9F0A',
+            fontWeight: 900,
+            textShadow: '0 0 14px rgba(255, 159, 10, 0.8)',
+          }}
+        >
+          {matchedStr}
+        </span>
+      );
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts;
+};
+
 /** 하단 시네마틱 자막 — 스크립트 원본 문장 100% 매칭 (STT 오인식 제로) */
 const ScriptCaption: React.FC<{
   subtitles?: { text: string; start: number; end: number }[];
@@ -356,7 +460,7 @@ const ScriptCaption: React.FC<{
               opacity: textFade,
             }}
           >
-            {activeSub.text}
+            {renderBroadcastingStyledText(activeSub.text)}
           </span>
         </div>
       </div>
@@ -648,6 +752,7 @@ const StockVideo: React.FC<{ items: VideoItem[] }> = ({ items }) => {
             contact={contact}
             investorInsight={item.investorInsight}
             annotations={item.annotations}
+            levels={item.levels}
           />
         ) : (
           <>
@@ -741,7 +846,8 @@ const SceneView: React.FC<{
   contact: { channel?: string; url?: string; note?: string };
   investorInsight?: InvestorInsight;
   annotations?: ChartAnnotation[];
-}> = ({ scenes, supply, series, name, ticker, contact, investorInsight, annotations }) => {
+  levels?: LevelPayload | null;
+}> = ({ scenes, supply, series, name, ticker, contact, investorInsight, annotations, levels }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
   const t = frame / fps;
@@ -832,6 +938,14 @@ const SceneView: React.FC<{
                     chartKind={chartKind}
                     t={t}
                     cameraScale={camera.scale}
+                  />
+                  {/* 방송국 30년 수석 편집 & VFX 레이어 (대본 타임코드 동기화) */}
+                  <BroadcastingVfxLayer
+                    sceneId={scene.id}
+                    series={series}
+                    chartKind={chartKind}
+                    t={t}
+                    levels={levels}
                   />
                 </div>
               </div>
