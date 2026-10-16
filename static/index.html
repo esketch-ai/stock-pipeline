@@ -60,6 +60,14 @@
         </div>
         <div class="chips" id="filters"></div>
         <div class="spacer"></div>
+        <div id="gdrive-actions" style="display:flex;align-items:center;gap:8px;margin-right:8px;">
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;color:var(--text-sub);">
+            <input type="checkbox" id="chk-select-all" onchange="toggleSelectAll(this.checked)" /> 전체선택
+          </label>
+          <button id="btn-gdrive-export" class="btn primary sm" onclick="exportSelectedToGDrive()" style="background:#1a73e8;border-color:#1a73e8;">
+            ☁️ 구글 드라이브 전송 (<span id="selected-count">0</span>)
+          </button>
+        </div>
         <div class="seg" id="viewtoggle">
           <button class="on" data-view="card">카드</button>
           <button data-view="table">표</button>

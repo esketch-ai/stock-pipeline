@@ -629,6 +629,68 @@ def api_visibility(date: str, ticker: str, visibility: str = "private") -> dict:
 
 
 # ─────────────────────────────────────────────────────────
+# Google Drive 동기화 및 백업
+# ─────────────────────────────────────────────────────────
+
+@app.get("/api/gdrive/status")
+def api_gdrive_status() -> dict:
+    """Google Drive 인증 상태 및 폴더 정보 조회."""
+    import gdrive_sync
+    authed = gdrive_sync.is_authenticated()
+    return {
+        "authenticated": authed,
+        "folder_name": gdrive_sync.GDRIVE_FOLDER_NAME,
+        "token_path": str(gdrive_sync.GDRIVE_TOKEN_PATH),
+    }
+
+
+@app.post("/api/gdrive/upload")
+def api_gdrive_upload(payload: dict) -> dict:
+    """선택한 종목 리스트의 모든 영상 에셋을 Google Drive로 일괄 백업."""
+    import gdrive_sync
+    date = _check_date(payload.get("date", ""))
+    tickers = payload.get("tickers") or []
+    if not isinstance(tickers, list) or not tickers:
+        raise HTTPException(400, "전송할 종목 코드 목록(tickers)이 비어 있습니다.")
+    for t in tickers:
+        _check_ticker(t)
+
+    if not gdrive_sync.is_authenticated():
+        raise HTTPException(401, "Google Drive 인증이 필요합니다. terminal에서 'python3 tools/gdrive_auth.py'를 1회 실행해 승인하세요.")
+
+    def _fn(step):
+        def _update(st, msg):
+            step(f"{st} — {msg}")
+
+        res = gdrive_sync.batch_sync_to_gdrive(date, tickers, job_updater=_update)
+        return res
+
+    job = _start_job("gdrive_upload", f"Google Drive 백업 ({len(tickers)}개)", _fn)
+    return {"job": job.as_dict(), "date": date, "tickers": tickers}
+
+
+@app.post("/api/gdrive/upload/{date}/{ticker}")
+def api_gdrive_upload_single(date: str, ticker: str) -> dict:
+    """단일 종목의 영상 에셋을 Google Drive로 즉시 백업."""
+    import gdrive_sync
+    _check_date(date)
+    _check_ticker(ticker)
+
+    if not gdrive_sync.is_authenticated():
+        raise HTTPException(401, "Google Drive 인증이 필요합니다. terminal에서 'python3 tools/gdrive_auth.py'를 1회 실행해 승인하세요.")
+
+    def _fn(step):
+        step("Google Drive 전송 중")
+        service = gdrive_sync.get_drive_service()
+        res = gdrive_sync.sync_stock_bundle(service, date, ticker)
+        step("완료")
+        return res
+
+    job = _start_job("gdrive_upload", f"Google Drive 백업 {ticker}", _fn)
+    return {"job": job.as_dict()}
+
+
+# ─────────────────────────────────────────────────────────
 # 삭제
 # ─────────────────────────────────────────────────────────
 

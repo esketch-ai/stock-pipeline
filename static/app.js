@@ -36,6 +36,7 @@ const S = {
   runs: [], date: null, items: [],
   view: localStorage.getItem('sp.view') || 'card',
   filter: 'all', q: '',
+  selectedTickers: new Set(),
   jobs: [], jobTimer: null, logTimer: null,
 };
 
@@ -217,6 +218,8 @@ function renderRuns() {
 
 async function selectRun(date) {
   S.date = date;
+  S.selectedTickers = new Set();
+  updateSelectedCount();
   renderRuns();
   $('#content').innerHTML = loading('불러오는 중');
   try {
@@ -318,6 +321,11 @@ function card(it) {
 
   return `<div class="card">
     <div class="thumb" onclick="openItem('${it.date}','${it.ticker}')">
+      <div style="position:absolute;top:8px;left:8px;z-index:6;" onclick="event.stopPropagation()">
+        <input type="checkbox" style="width:18px;height:18px;cursor:pointer;accent-color:#1a73e8;"
+          onchange="toggleSelectTicker('${it.ticker}', this.checked)"
+          ${S.selectedTickers.has(it.ticker) ? 'checked' : ''} />
+      </div>
       ${it.video_url
         ? `<img loading="lazy" src="${it.thumb_url}" alt="" onerror="this.style.opacity=0">`
         : '<div class="none"><span style="font-size:22px;opacity:.5">🎬</span><span>렌더된 영상 없음</span></div>'}
@@ -348,6 +356,7 @@ function card(it) {
         <button class="btn sm" onclick="openScript('${it.date}','${it.ticker}')">대본</button>
         <button class="btn sm" onclick="rebuild('${it.date}','${it.ticker}')" ${it.long_text ? '' : 'disabled'}>재빌드</button>
         <button class="btn sm" onclick="publish('${it.date}','${it.ticker}')" ${it.video && !it.published_video_id ? '' : 'disabled'}>게시</button>
+        <button class="btn sm" onclick="uploadSingleToGDrive('${it.date}','${it.ticker}')" title="Google Drive로 모든 에셋 전송">☁️ 드라이브</button>
       </div>
     </div>
   </div>`;
@@ -355,6 +364,7 @@ function card(it) {
 
 function tableHead() {
   return `<thead><tr>
+    <th style="width:36px;text-align:center;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" /></th>
     <th class="tthumb"></th><th>종목</th><th class="num">등락률</th><th class="num">종가</th>
     <th>상태</th><th>품질</th><th class="num">길이</th><th class="num">용량</th><th></th>
   </tr></thead>`;
@@ -368,6 +378,7 @@ function tableRow(it) {
     : it.video ? '<span class="pill ok">렌더완료</span>' : '<span class="pill warn">미렌더</span>';
   const qual = it.quality?.score;
   return `<tr>
+    <td style="text-align:center;"><input type="checkbox" onchange="toggleSelectTicker('${it.ticker}', this.checked)" ${S.selectedTickers.has(it.ticker) ? 'checked' : ''} /></td>
     <td class="tthumb">${it.video_url ? `<img loading="lazy" src="${it.thumb_url}" onclick="openItem('${it.date}','${it.ticker}')">` : ''}</td>
     <td class="tname">${esc(it.name || it.ticker)}<div class="cb-tick">${esc(it.ticker)}</div></td>
     <td class="num" style="color:${chg >= 0 ? 'var(--up)' : 'var(--down)'}">${pct(chg)}</td>
@@ -375,6 +386,13 @@ function tableRow(it) {
     <td>${st}</td>
     <td class="num">${qual ?? '—'}</td>
     <td class="num">${q.duration ? dur(q.duration) : '—'}</td>
+    <td class="num">${it.video_bytes ? fmtB(it.video_bytes) : '—'}</td>
+    <td class="acts" style="display:flex;gap:4px;">
+      <button class="btn sm primary" onclick="openItem('${it.date}','${it.ticker}')">상세</button>
+      <button class="btn sm" onclick="uploadSingleToGDrive('${it.date}','${it.ticker}')" title="Google Drive 백업">☁️</button>
+    </td>
+  </tr>`;
+}
     <td class="num">${it.video_bytes ? fmtB(it.video_bytes) : '—'}</td>
     <td><button class="btn sm" onclick="openItem('${it.date}','${it.ticker}')">열기</button></td>
   </tr>`;
@@ -726,3 +744,118 @@ function pollJobs(now = false) {
     if (now) return;
   }, 5000);
 }
+
+/* ═══════════════ Google Drive 동기화 및 백업 ═══════════════ */
+function toggleSelectTicker(ticker, checked) {
+  if (checked) {
+    S.selectedTickers.add(ticker);
+  } else {
+    S.selectedTickers.delete(ticker);
+  }
+  updateSelectedCount();
+}
+
+function toggleSelectAll(checked) {
+  if (checked) {
+    S.items.forEach(it => S.selectedTickers.add(it.ticker));
+  } else {
+    S.selectedTickers.clear();
+  }
+  updateSelectedCount();
+  renderItems();
+}
+
+function updateSelectedCount() {
+  const cnt = S.selectedTickers ? S.selectedTickers.size : 0;
+  const countEl = $('#selected-count');
+  if (countEl) countEl.textContent = cnt;
+  const chkAll = $('#chk-select-all');
+  if (chkAll) chkAll.checked = cnt > 0 && cnt === S.items.length;
+}
+
+async function exportSelectedToGDrive() {
+  const tickers = Array.from(S.selectedTickers);
+  if (!tickers.length) {
+    toast('Google Drive로 전송할 영상을 1개 이상 선택하세요.', 'warn');
+    return;
+  }
+  if (!S.date) {
+    toast('선택된 실행 날짜가 없습니다.', 'bad');
+    return;
+  }
+
+  // Google Drive 인증 상태 사전 체크
+  try {
+    const st = await api('/api/gdrive/status');
+    if (!st.authenticated) {
+      openModal(
+        '🔑 Google Drive 인증 필요',
+        '구글 드라이브 업로드를 위해 최초 1회 OAuth 승인이 필요합니다.',
+        `<div style="line-height:1.6">
+          <p>서버 터미널에서 아래 명령어를 실행하여 구글 드라이브 권한을 승인해주세요:</p>
+          <pre style="background:var(--bg-card);padding:12px;border-radius:6px;user-select:all;margin:12px 0;">python3 tools/gdrive_auth.py</pre>
+          <p style="color:var(--text-sub);font-size:13px;">※ 승인 완료 후 생성된 <code>state/gdrive_token.json</code> 토큰으로 자동 연동됩니다.</p>
+        </div>`,
+        `<button class="btn primary" onclick="closeModal()">확인</button>`
+      );
+      return;
+    }
+  } catch (e) {
+    toast(`Google Drive 상태 조회 실패: ${e.message}`, 'bad');
+    return;
+  }
+
+  openModal(
+    '☁️ Google Drive 백업 전송',
+    `${S.date} · 총 ${tickers.length}개 종목의 전체 에셋을 전송합니다`,
+    `<div style="line-height:1.6">
+      <p><b>전송 대상 종목 (${tickers.length}개):</b></p>
+      <div style="background:var(--bg-card);padding:10px;border-radius:6px;max-height:140px;overflow-y:auto;margin:8px 0;">
+        ${tickers.map(t => {
+          const item = S.items.find(i => i.ticker === t);
+          return `<span class="pill" style="margin:2px 4px;">${esc(item?.name || t)} (${t})</span>`;
+        }).join('')}
+      </div>
+      <p style="margin-top:12px;font-size:13px;color:var(--text-sub);">
+        📦 <b>동봉 패키지 목록:</b><br/>
+        • 4K 렌더링 마스터 비디오 (.mp4)<br/>
+        • 내레이션 음성 파일 (.mp3)<br/>
+        • 30년 작가 8대 씬 스토리텔링 대본 (.txt)<br/>
+        • 6대 애널리스트 100점 만점 감사 보고서 (.md)<br/>
+        • 유튜브 메타데이터 및 3대 핵심 투자 포인트 (.json)<br/>
+        • 가격 캔들 및 보조지표 차트 이미지 (.png)
+      </p>
+      <p style="margin-top:8px;font-size:13px;color:var(--text-sub);">
+        📁 <b>저장 경로:</b> 내 Google Drive &gt; <code>주식챠트를뿌셔보까_아카이브/${S.date}/[종목명_코드]/</code>
+      </p>
+    </div>`,
+    `<button class="btn" onclick="closeModal()">취소</button>
+     <button class="btn primary" onclick="doGDriveExport('${S.date}', ${JSON.stringify(tickers)})" style="background:#1a73e8;border-color:#1a73e8;">지금 전송 시작</button>`
+  );
+}
+
+async function doGDriveExport(date, tickers) {
+  closeModal();
+  try {
+    const res = await api('/api/gdrive/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, tickers }),
+    });
+    toast(`☁️ Google Drive 전송 작업이 등록되었습니다 (${tickers.length}개 종목)`);
+    fetchJobs();
+  } catch (e) {
+    toast(`전송 등록 실패: ${e.message}`, 'bad');
+  }
+}
+
+async function uploadSingleToGDrive(date, ticker) {
+  try {
+    const res = await api(`/api/gdrive/upload/${date}/${ticker}`, { method: 'POST' });
+    toast(`☁️ [${ticker}] Google Drive 전송 작업이 등록되었습니다`);
+    fetchJobs();
+  } catch (e) {
+    toast(`전송 등록 실패: ${e.message}`, 'bad');
+  }
+}
+
