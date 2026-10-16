@@ -418,6 +418,14 @@ async def api_validate_script(payload: dict) -> dict:
 # ─────────────────────────────────────────────────────────
 
 
+@app.post("/api/actions/sync")
+def api_sync_unarchived() -> dict:
+    """output/ 디렉토리의 미등록 영상들을 아카이브와 즉시 동기화."""
+    count = archive.sync_unarchived_videos()
+    archive._rebuild_index()
+    return {"ok": True, "synced_count": count}
+
+
 @app.post("/api/actions/run")
 def api_run_pipeline(payload: dict) -> dict:
     """배치 실행 — 지정 종목 또는 스크리닝 결과로 5단계를 돌린다."""

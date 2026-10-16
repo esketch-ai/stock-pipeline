@@ -75,7 +75,9 @@ function init() {
   $('#modal-close').addEventListener('click', closeModal);
   $('#modal').addEventListener('click', (e) => { if (e.target === $('#modal')) closeModal(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
-  $('#runs-reload').addEventListener('click', () => loadRuns());
+  const btnSync = $('#btn-sync');
+  if (btnSync) btnSync.addEventListener('click', syncVideos);
+  $('#runs-reload').addEventListener('click', () => syncVideos());
   $$('#viewtoggle button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   $('#q').addEventListener('input', (e) => { S.q = e.target.value.trim().toLowerCase(); renderItems(); });
 
@@ -182,6 +184,22 @@ function renderPills() {
 }
 
 /* ═══════════════ 실행 이력 ═══════════════ */
+async function syncVideos() {
+  const btn = $('#btn-sync');
+  if (btn) btn.disabled = true;
+  try {
+    toast('최신 생성 영상 동기화 중...', 'ok', 1500);
+    const res = await api('/api/actions/sync', { method: 'POST' });
+    toast(`동기화 완료: ${res.synced_count ?? 0}건 추가/갱신`, 'ok', 2500);
+    await refreshStats();
+    await loadRuns();
+  } catch (e) {
+    toast(`동기화 실패: ${e.message}`, 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function loadRuns(quiet = false) {
   try {
     S.runs = await api('/api/runs');

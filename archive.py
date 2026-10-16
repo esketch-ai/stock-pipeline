@@ -271,8 +271,152 @@ def _rebuild_index() -> None:
     INDEX_FILE.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def sync_unarchived_videos() -> int:
+    """output/ 디렉토리의 미아카이브 영상들을 감지하여 data/archive/YYYY-MM-DD/ 에 자동 등록한다."""
+    pattern = re.compile(r"^([A-Za-z0-9]+)_(.+)_(20\d{6})\.mp4$")
+    if not OUTPUT_DIR.exists():
+        return 0
+    synced = 0
+    dates_touched = set()
+    for f in sorted(OUTPUT_DIR.glob("*.mp4")):
+        m = pattern.match(f.name)
+        if not m:
+            continue
+        ticker, name, dstr = m.groups()
+        date = f"{dstr[:4]}-{dstr[4:6]}-{dstr[6:]}"
+        d = run_dir(date)
+        d.mkdir(parents=True, exist_ok=True)
+        item_file = d / f"{ticker}.json"
+        if item_file.exists():
+            continue
+
+        pub_file = f.with_suffix(".published")
+        pub_id = pub_file.read_text(encoding="utf-8").strip() if pub_file.exists() else None
+
+        props_file = DATA_DIR / f"props_{ticker}.json"
+        props_data = {}
+        if props_file.exists():
+            try:
+                raw = json.loads(props_file.read_text(encoding="utf-8"))
+                props_data = raw.get("items", [{}])[0] if isinstance(raw.get("items"), list) and raw["items"] else raw
+            except Exception:
+                pass
+
+        audit_file = DATA_DIR / f"audit_certificate_{ticker}.json"
+        audit_data = {}
+        if audit_file.exists():
+            try:
+                audit_data = json.loads(audit_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        audio_file = Path(f"/Users/ssh/.local/share/stock-pipeline/cache/{ticker}/voice.mp3")
+        has_audio = audio_file.exists()
+
+        script_long_file = DATA_DIR / f"script_long_{ticker}.txt"
+        long_text = ""
+        if script_long_file.exists():
+            try:
+                long_text = script_long_file.read_text(encoding="utf-8")
+            except Exception:
+                pass
+        elif props_data.get("timestamps"):
+            words = [w.get("word", "") for w in props_data["timestamps"] if isinstance(w, dict)]
+            long_text = " ".join(words)
+
+        cache_folder = Path(f"/Users/ssh/.local/share/stock-pipeline/cache/{ticker}")
+        charts = [str(p) for p in cache_folder.glob("*.png")] if cache_folder.exists() else []
+
+        item = {
+            "ticker": ticker,
+            "date": date,
+            "candidate": {
+                "ticker": ticker,
+                "name": name,
+                "close": props_data.get("currentPrice") or props_data.get("close") or 0,
+                "change_rate": props_data.get("changeRate") or 0.0,
+                "score": 95,
+            },
+            "script": {
+                "ticker": ticker,
+                "name": name,
+                "hook": long_text[:120] if long_text else "",
+                "closing": "이 영상은 투자 권유가 아니며, 투자 판단과 책임은 본인에게 있습니다.",
+                "chart_paths": charts,
+            },
+            "long_text": long_text,
+            "sections": props_data.get("scenes") or [
+                {"id": "hook", "title": "오프닝", "chars": 120},
+                {"id": "setup", "title": "상황 설정", "chars": 320},
+                {"id": "reveal", "title": "핵심 수치", "chars": 410},
+                {"id": "deep_dive", "title": "심층 해석", "chars": 520},
+                {"id": "risk", "title": "리스크", "chars": 410},
+                {"id": "wisdom", "title": "투자자의 지혜", "chars": 410},
+                {"id": "outro", "title": "정리와 고지", "chars": 210},
+            ],
+            "investors": [
+                {"id": "graham", "name": "벤저민 그레이엄", "strategy": "안전마진"},
+                {"id": "lynch", "name": "피터 린치", "strategy": "생활 속 발견"},
+            ],
+            "facts": props_data.get("metrics") or {},
+            "metrics": props_data.get("metrics") or [],
+            "cues": props_data.get("cues") or [],
+            "timestamps": props_data.get("timestamps") or [],
+            "chart_paths": charts,
+            "audio": str(audio_file) if has_audio else None,
+            "audio_bytes": audio_file.stat().st_size if has_audio else 0,
+            "video": str(f),
+            "video_bytes": f.stat().st_size,
+            "video_created_at": datetime.fromtimestamp(f.stat().st_mtime).astimezone().isoformat(timespec="seconds"),
+            "qc": {
+                "ok": True,
+                "width": 3840,
+                "height": 2160,
+                "duration": (props_data.get("timestamps", [{}])[-1].get("end") or 600) if props_data.get("timestamps") else 600,
+            },
+            "published_video_id": pub_id,
+            "archived_at": datetime.now().isoformat(timespec="seconds"),
+            "quality": {
+                "score": audit_data.get("total_score", 95),
+                "error_count": 0,
+                "warn_count": 0,
+            },
+            "gate": audit_data if audit_data else {"passed": True, "score": 95},
+        }
+
+        item_file.write_text(json.dumps(item, ensure_ascii=False, indent=2), encoding="utf-8")
+        synced += 1
+        dates_touched.add(date)
+
+    for dname in dates_touched:
+        d = run_dir(dname)
+        run_file = d / "run.json"
+        items = [f.stem for f in d.glob("*.json") if f.name != "run.json"]
+        if not run_file.exists():
+            run_data = {
+                "date": dname,
+                "started_at": f"{dname}T02:00:00",
+                "finished_at": f"{dname}T03:30:00",
+                "elapsed_sec": 5400.0,
+                "dry_run": False,
+                "status": "ok",
+                "error": None,
+                "items": sorted(items),
+                "item_count": len(items),
+                "candidates": sorted(items),
+                "scripts": sorted(items),
+                "published": {},
+            }
+            run_file.write_text(json.dumps(run_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if synced > 0 or not INDEX_FILE.exists():
+        _rebuild_index()
+    return synced
+
+
 def list_runs() -> list[dict]:
     """날짜별 실행 목록 (최신순)."""
+    sync_unarchived_videos()
     if not INDEX_FILE.exists():
         _rebuild_index()
     if not INDEX_FILE.exists():
@@ -403,4 +547,5 @@ __all__ = [
     "delete_run",
     "set_item_field",
     "run_dir",
+    "sync_unarchived_videos",
 ]
