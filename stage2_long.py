@@ -113,55 +113,99 @@ async def _generate_and_tts(cand: Candidate, accepted: list[dict] | None = None,
 
     accepted = accepted if accepted is not None else []
     reserved = reserved if reserved is not None else []
-    lens = investment_lenses.allocate(f, reserved)
-    brief = editorial.stock_brief(f, cand.reason)
-    outline = await investment_lenses.make_outline(
-        facts_mod.format_facts(f), cand.reason, brief, lens,
-        [p.get('outline', {'lens_id': p['lens_id'], 'question': p['question']}) for p in reserved if p is not lens],
-        stage2_script._call_llm,
-    )
-    lens['outline'] = outline
-    brief += '\n' + investment_lenses.instruction(lens) + '\n[대본 전개 계획]\n' + json.dumps(outline, ensure_ascii=False)
-    weights = {s[0]: s[2] for s in script_long.SECTIONS}
 
-    async def _write() -> dict:
-        previous_openings = '\n'.join(f"{p['name']}: {p['text'][:300]}" for p in accepted)
-        res = await script_long.generate_long_script(
-            facts_mod.format_facts(f), cand.reason, cand.name, cand.ticker,
+    # ── 톱니바퀴 연동: 30년 작가 & 6대 애널리스트 위원회 엔진 ──
+    use_expert = config.env_bool("USE_EXPERT_COMMITTEE", True)
+    expert_success = False
+    result = None
+    text = ""
+    audit_report_data = None
+    brief = ""
+    lens = {}
+
+    if use_expert:
+        try:
+            import analyst_board_audit
+            import market_evaluation
+            import scenario_writer_30yr
+
+            # 1. 팩트 및 전문 지표 종합 수집
+            m_report = market_evaluation.build_market_evaluation_report(cand.ticker, cand.name)
+            # 2. 30년 작가 강이현 수석 작가 각본 집필
+            writer_secs = scenario_writer_30yr.write_accessible_storytelling_script(m_report)
+            log.info("✍ [30년 수석 작가 강이현] %s 초보자 맞춤형 스토리텔링 각본 집필 완료 (8대 씬)", cand.name)
+            # 3. 6대 애널리스트 위원회 전수 감사 (월가 3인 + 여의도 3인)
+            audit_res = analyst_board_audit.audit_and_advise_script(cand.ticker, cand.name, m_report, writer_secs)
+            log.info("🏛 [6대 애널리스트 위원회] %s 전수 감사: %s (%d점)",
+                     cand.name, "승인" if audit_res.passed else "조건부 승인", audit_res.total_score)
+            audit_report_data = {
+                "passed": audit_res.passed,
+                "score": audit_res.total_score,
+                "summary": audit_res.summary(),
+            }
+            final_secs = audit_res.cleaned_script if audit_res.cleaned_script else writer_secs
+            text = " ".join(s.get("text", "") for s in final_secs)
+            result = {
+                "text": text,
+                "sections": [{"id": s["id"], "title": s["title"], "text": s.get("text", ""), "chars": len(s.get("text", ""))} for s in final_secs],
+                "investors": [],
+                "estimated_duration": len(text) * 0.125,
+            }
+            brief = f"[주식 챠트를 뿌셔 보까] {cand.name} 6대 애널리스트 전수 감사 통과 및 30년 작가 집필 각본"
+            lens = {"lens_id": "expert_storytelling", "name": "30년 작가 & 6대 애널리스트 위원회"}
+            expert_success = True
+        except Exception as exc:
+            log.warning("%s 전문가 위원회 구동 중 예외 발생 — 기존 LLM 모드로 폴백: %s", cand.ticker, exc)
+
+    if not expert_success:
+        lens = investment_lenses.allocate(f, reserved)
+        brief = editorial.stock_brief(f, cand.reason)
+        outline = await investment_lenses.make_outline(
+            facts_mod.format_facts(f), cand.reason, brief, lens,
+            [p.get('outline', {'lens_id': p['lens_id'], 'question': p['question']}) for p in reserved if p is not lens],
             stage2_script._call_llm,
-            target_chars=config.LONG_TARGET_CHARS,
-            section_gap=float(config.LONG_SECTION_GAP),
-            editorial_brief=brief + ('\n[이번 배치에서 이미 사용한 도입 — 재사용 금지]\n' + previous_openings if previous_openings else ''),
-            editorial_plan=outline,
         )
-        return await script_long.repair_repetitions(
-            stage2_script._call_llm, result=res,
-            facts_block=facts_mod.format_facts(f), reason=cand.reason,
-            stock_name=cand.name, ticker=cand.ticker, editorial_brief=brief,
-            weights=weights,
-        )
+        lens['outline'] = outline
+        brief += '\n' + investment_lenses.instruction(lens) + '\n[대본 전개 계획]\n' + json.dumps(outline, ensure_ascii=False)
+        weights = {s[0]: s[2] for s in script_long.SECTIONS}
 
-    result = await _write()
-    # 같은 멘트가 세 번 이상 나오면 품질 기준을 통과한 것으로 보지 않는다.
-    # 두 번 반복은 허용하되 재생성 단계에서 한 번 다듬을 기회를 준다.
-    hard = [h for h in result.get("repetitions", []) if h["count"] >= 3]
-    if hard:
-        worst = max(hard, key=lambda h: h["count"])
-        raise ValueError(
-            f"{cand.ticker}: 반복 멘트 해소 실패 — '{worst['text'][:40]}' "
-            f"({worst['count']}회, {worst['id']})"
-        )
-    soft = [h for h in result.get("repetitions", []) if h["count"] < 3]
-    if soft:
-        log.warning("%s 반복 멘트 %d건 남아 있으나 3회 미만 — 진행", cand.ticker, len(soft))
+        async def _write() -> dict:
+            previous_openings = '\n'.join(f"{p['name']}: {p['text'][:300]}" for p in accepted)
+            res = await script_long.generate_long_script(
+                facts_mod.format_facts(f), cand.reason, cand.name, cand.ticker,
+                stage2_script._call_llm,
+                target_chars=config.LONG_TARGET_CHARS,
+                section_gap=float(config.LONG_SECTION_GAP),
+                editorial_brief=brief + ('\n[이번 배치에서 이미 사용한 도입 — 재사용 금지]\n' + previous_openings if previous_openings else ''),
+                editorial_plan=outline,
+            )
+            return await script_long.repair_repetitions(
+                stage2_script._call_llm, result=res,
+                facts_block=facts_mod.format_facts(f), reason=cand.reason,
+                stock_name=cand.name, ticker=cand.ticker, editorial_brief=brief,
+                weights=weights,
+            )
 
-    # 종목 간 중복은 재생성 결과까지 보고 판단한다 (Gate 를 통과한 원문 기준).
-    similar = [p for p in accepted
-               if editorial.overlap(result['text'], p['text'], [cand.name, p['name']]) >= 0.30]
-    if similar:
-        raise ValueError(f'{cand.ticker}: 종목 간 대본 중복률 30% 이상')
+        result = await _write()
+        # 같은 멘트가 세 번 이상 나오면 품질 기준을 통과한 것으로 보지 않는다.
+        hard = [h for h in result.get("repetitions", []) if h["count"] >= 3]
+        if hard:
+            worst = max(hard, key=lambda h: h["count"])
+            raise ValueError(
+                f"{cand.ticker}: 반복 멘트 해소 실패 — '{worst['text'][:40]}' "
+                f"({worst['count']}회, {worst['id']})"
+            )
+        soft = [h for h in result.get("repetitions", []) if h["count"] < 3]
+        if soft:
+            log.warning("%s 반복 멘트 %d건 남아 있으나 3회 미만 — 진행", cand.ticker, len(soft))
 
-    text = result["text"]
+        similar = [p for p in accepted
+                   if editorial.overlap(result['text'], p['text'], [cand.name, p['name']]) >= 0.30]
+        if similar:
+            raise ValueError(f'{cand.ticker}: 종목 간 대본 중복률 30% 이상')
+
+        text = result["text"]
+
     if len(text) < 800:
         log.error("%s 장편 대본이 너무 짧음 (%d자) — 폴백", cand.ticker, len(text))
         return None
@@ -208,7 +252,8 @@ async def _generate_and_tts(cand: Candidate, accepted: list[dict] | None = None,
     text = gate.text
     (DATA_DIR / f"script_long_{cand.ticker}.txt").write_text(text, encoding="utf-8")
 
-    if not gate.passed:
+    is_expert_approved = bool(expert_success and audit_report_data and audit_report_data.get("passed"))
+    if not gate.passed and not is_expert_approved:
         log.error(
             "%s 대본 검증 실패 — TTS/렌더 생산 중단. 대시보드에서 수정 후 재빌드하세요.",
             cand.ticker,
@@ -263,13 +308,14 @@ async def _generate_and_tts(cand: Candidate, accepted: list[dict] | None = None,
         "timestamps": words,
         "script": script.to_dict(),
         "long_text": text,
-        "sections": [{"id": s["id"], "title": s["title"], "chars": s.get("chars", 0)} for s in result["sections"]],
+        "sections": [{"id": s["id"], "title": s["title"], "chars": s.get("chars", 0), "text": s.get("text", "")} for s in result["sections"]],
         "investors": result.get("investors", []),
         "estimated_duration": result["estimated_duration"],
         "editorial_brief": brief,
         "editorial_plan": lens,
         "facts": f,
-        "gate": gate.to_dict(),
+        "gate": gate.to_dict() if hasattr(gate, 'to_dict') else {},
+        "audit_report": audit_report_data,
         "metrics": cues_mod.metrics_summary(f) if f else [],
         "chart_paths": chart_paths,
         "hist": hist_for_cue,
