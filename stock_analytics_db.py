@@ -33,10 +33,16 @@ _HEADERS = {
 }
 _SSL_CTX = ssl._create_unverified_context()
 
+# 인메모리 TTL 캐시 (30분 유효): 파이프라인 내 반복 호출 시 O(1) 즉시 반환
+_ANALYTICS_CACHE: Dict[str, tuple[datetime, Dict[str, Any]]] = {}
+CACHE_TTL_SECONDS = 1800
+
 
 def get_db_connection() -> sqlite3.Connection:
-    """SQLite 데이터베이스 연결 반환 및 테이블 자동 생성."""
-    conn = sqlite3.connect(str(DB_PATH))
+    """SQLite 데이터베이스 고속 연결 (WAL 모드 & 비동기 최적화)."""
+    conn = sqlite3.connect(str(DB_PATH), timeout=30.0)
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -610,11 +616,18 @@ def calculate_technical_indicators(series: Dict[str, List[Any]]) -> Dict[str, An
 # ─────────────────────────────────────────────────────────────
 
 
-def collect_and_store_full_stock_analytics(ticker: str, name: str) -> Dict[str, Any]:
-    """네이버 증권의 모든 지표를 수집하고 SQLite DB에 저장."""
+def collect_and_store_full_stock_analytics(ticker: str, name: str, force_refresh: bool = False) -> Dict[str, Any]:
+    """네이버 증권의 모든 지표를 수집하고 SQLite DB에 저장 (인메모리 캐싱 지원)."""
+    now = datetime.now()
+    if not force_refresh and ticker in _ANALYTICS_CACHE:
+        cached_time, cached_data = _ANALYTICS_CACHE[ticker]
+        if (now - cached_time).total_seconds() < CACHE_TTL_SECONDS:
+            log.debug("⚡ [%s] 인메모리 캐시 히트 (0ms 반환)", ticker)
+            return cached_data
+
     init_database()
-    now_iso = datetime.now().isoformat()
-    today_iso = datetime.now().strftime("%Y-%m-%d")
+    now_iso = now.isoformat()
+    today_iso = now.strftime("%Y-%m-%d")
 
     # 1. 네이버 통합 정보 및 재무제표 수집
     integ = naver_finance.fetch_stock_integration(ticker)
@@ -831,7 +844,7 @@ def collect_and_store_full_stock_analytics(ticker: str, name: str) -> Dict[str, 
 
     log.info("✔ %s (%s) 전체 전문가 분석 데이터 및 내부자 지분 공시 DB 저장 완료", name, ticker)
 
-    return {
+    result = {
         "ticker": ticker,
         "name": name,
         "profile": {"c1": c1, "c2": c2, "c3": c3, "mcap_raw": mc_raw, "price": cur_p},
@@ -852,3 +865,5 @@ def collect_and_store_full_stock_analytics(ticker: str, name: str) -> Dict[str, 
         },
         "macro": macro
     }
+    _ANALYTICS_CACHE[ticker] = (now, result)
+    return result

@@ -90,20 +90,25 @@ def section_times(sections: list[dict], timestamps: list[dict], total: float) ->
     if not marks:
         return [(0.0, total)] * len(sections)
 
+    import bisect
+    mark_positions = [m[0] for m in marks]
+
     def _time_at(char_pos: float) -> float:
-        """대본 문자 위치 → 발화 시각 (인접 구간 내 선형 보간)."""
+        """대본 문자 위치 → 발화 시각 (bisect 이진 탐색 O(log M) 고속 선형 보간)."""
         if char_pos <= 0:
             return marks[0][1]
         if char_pos >= marks[-1][0]:
             return marks[-1][1]
-        for i in range(1, len(marks)):
-            c_prev, t_prev = marks[i - 1]
-            c_cur, t_cur = marks[i]
-            if char_pos <= c_cur:
-                span = c_cur - c_prev
-                ratio = (char_pos - c_prev) / span if span else 0.0
-                return t_prev + (t_cur - t_prev) * ratio
-        return marks[-1][1]
+        idx = bisect.bisect_right(mark_positions, char_pos)
+        if idx == 0:
+            return marks[0][1]
+        if idx >= len(marks):
+            return marks[-1][1]
+        c_prev, t_prev = marks[idx - 1]
+        c_cur, t_cur = marks[idx]
+        span = c_cur - c_prev
+        ratio = (char_pos - c_prev) / span if span else 0.0
+        return t_prev + (t_cur - t_prev) * ratio
 
     out: list[tuple[float, float]] = []
     acc_chars = 0

@@ -69,6 +69,16 @@ class BoardAuditResult:
 
 
 # ─────────────────────────────────────────────────────────────
+# 고성능 정규식 사전 컴파일 (Pre-compiled Regex for Audit Acceleration)
+# ─────────────────────────────────────────────────────────────
+_RE_PBR = re.compile(r"피비알\s*([\d.]+)")
+_RE_FOREIGN_BUY = re.compile(r"외국인[^.?!]{1,60}순매수")
+_RE_FOREIGN_SELL = re.compile(r"외국인[^.?!]{1,60}순매도")
+_RE_INST_BUY = re.compile(r"기관[^.?!]{1,60}순매수")
+_RE_POC = re.compile(r"피오씨는\s*([\d,]+)원")
+
+
+# ─────────────────────────────────────────────────────────────
 # 6인의 개별 감사 로직
 # ─────────────────────────────────────────────────────────────
 
@@ -81,8 +91,7 @@ def _audit_us_valuation(m: Dict[str, Any], full_text: str) -> AnalystAuditOpinio
     cur_p = m.get("last_close") or m.get("cur_price") or 10000
 
     # PBR 팩트 대조
-    pbr_pattern = rf"피비알\s*([\d.]+)"
-    match = re.search(pbr_pattern, full_text)
+    match = _RE_PBR.search(full_text)
     if match:
         script_pbr = float(match.group(1))
         if abs(script_pbr - pbr) > 0.05:
@@ -119,21 +128,20 @@ def _audit_us_supply_flow(m: Dict[str, Any], full_text: str) -> Tuple[AnalystAud
 
     # 외국인 수급 부호 무결성 감사 (가장 치명적인 리스크!)
     if f_10d < -1.0:  # 순매도인데 순매수로 거짓 작성된 경우
-        # 외국인 순매도인데 '외국인' 근처에 '순매수' 단어가 있는지 검사
-        f_matches = re.findall(r"외국인[^.?!]{1,60}순매수", full_text)
+        f_matches = _RE_FOREIGN_BUY.findall(full_text)
         if f_matches:
             findings.append(f"치명적 오류: 외국인 10일 누적 {f_10d:,.1f}억 원 '순매도'인데 대본에 '순매수'로 왜곡됨 ({f_matches[0]})")
             corrections.append(f"외국인 수급 왜곡 교정: '순매수' 문구를 실측 순매도({abs(f_10d):,.1f}억 원) 및 비중 조절로 정정")
 
     if f_10d > 1.0:  # 순매수인데 순매도로 잘못 작성된 경우
-        f_sell_matches = re.findall(r"외국인[^.?!]{1,60}순매도", full_text)
+        f_sell_matches = _RE_FOREIGN_SELL.findall(full_text)
         if f_sell_matches:
             findings.append(f"수급 불일치: 외국인 10일 누적 {f_10d:,.1f}억 원 '순매수'인데 대본에 '순매도'로 작성됨")
             corrections.append(f"외국인 수급 교정: 실측 순매수({f_10d:,.1f}억 원) 유입으로 정정")
 
     # 기관 수급 부호 감사
     if i_10d < -1.0:
-        i_matches = re.findall(r"기관[^.?!]{1,60}순매수", full_text)
+        i_matches = _RE_INST_BUY.findall(full_text)
         if i_matches:
             findings.append(f"기관 수급 오류: 기관 10일 누적 {i_10d:,.1f}억 원 '순매도'인데 대본에 '순매수'로 작성됨")
             corrections.append(f"기관 수급 교정: 실측 순매도({abs(i_10d):,.1f}억 원)로 정정")
@@ -271,7 +279,7 @@ def _audit_kr_technical_chart(m: Dict[str, Any], full_text: str) -> AnalystAudit
 
     # POC 가격 대조
     if poc_p > 0:
-        poc_match = re.search(r"피오씨는\s*([\d,]+)원", full_text)
+        poc_match = _RE_POC.search(full_text)
         if poc_match:
             script_poc = int(poc_match.group(1).replace(",", ""))
             if abs(script_poc - poc_p) / poc_p > 0.03:  # 3% 이상 오차
