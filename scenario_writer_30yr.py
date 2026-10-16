@@ -119,8 +119,13 @@ def write_accessible_storytelling_script(m: Dict[str, Any]) -> List[Dict[str, st
     # 개인 수급 풀어서 설명
     if r_10d > 0:
         r_story = f"반면 개인 투자자들은 {r_10d:,.1f}억 원의 순매수로 저가 매수에 적극 동참하고 있습니다."
+    elif r_10d < 0:
+        r_story = (
+            f"반면 개인 투자자들은 {abs(r_10d):,.1f}억 원어치를 순매도했는데요, "
+            f"불안해진 개인들이 털어낸 물량을 외국인과 기관이라는 진짜 큰손들이 장바구니에 싹 쓸어 담으며 든든하게 손바통을 이어받은 것입니다."
+        )
     else:
-        r_story = f"반면 개인 투자자들은 {abs(r_10d):,.1f}억 원의 순매도를 나타내며 손손바뀜을 보였습니다."
+        r_story = "개인 투자자들은 큰 매매 없이 관망세를 유지하고 있습니다."
 
     # 지배구조 스토리
     if insider_count > 0:
