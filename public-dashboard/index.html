@@ -82,8 +82,18 @@
     <!-- ═══════════════ 일자별 타임라인 네비게이터 ═══════════════ -->
     <section class="date-timeline-bar" aria-label="추천 일자별 타임라인">
       <div class="date-timeline-head">
-        <span class="date-timeline-title">📅 추천 일자별 영상</span>
-        <span class="date-timeline-count" id="filtered-count-badge">전체 27개 영상</span>
+        <div class="date-timeline-title-wrap">
+          <span class="date-timeline-title">📅 추천 일자별 영상</span>
+          <span class="date-timeline-count" id="filtered-count-badge">전체 27개 영상</span>
+        </div>
+        <div class="accordion-batch-controls" id="batch-controls">
+          <button class="batch-btn" id="btn-expand-all" title="모든 일자 영상 카드 펼치기">
+            <span class="batch-icon">▼</span> 모두 펼치기
+          </button>
+          <button class="batch-btn" id="btn-collapse-all" title="모든 일자 영상 카드 접기">
+            <span class="batch-icon">▲</span> 모두 접기
+          </button>
+        </div>
       </div>
       <div class="date-chips-wrap" id="date-chips-container">
         <!-- 동적으로 일자별 칩 생성 -->

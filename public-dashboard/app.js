@@ -627,6 +627,12 @@
       countBadge.textContent = `${items.length}개 영상 표시 (전체 ${rawData?.items?.length || 0}개 중)`;
     }
 
+    // Toggle batch controls visibility in grouped view
+    const batchControls = $('#batch-controls');
+    if (batchControls) {
+      batchControls.hidden = (activeView !== 'grouped');
+    }
+
     if (activeView === 'grouped') {
       $('#grouped-container').hidden = false;
       $('#cards-container').hidden = true;
@@ -725,6 +731,21 @@
 
     // Refresh button
     $('#btn-refresh').addEventListener('click', loadData);
+
+    // 일자별 섹션 일괄 펼침 / 모두 접기
+    const btnExpandAll = $('#btn-expand-all');
+    if (btnExpandAll) {
+      btnExpandAll.addEventListener('click', () => {
+        $$('.date-group-section').forEach(sec => sec.classList.remove('collapsed'));
+      });
+    }
+
+    const btnCollapseAll = $('#btn-collapse-all');
+    if (btnCollapseAll) {
+      btnCollapseAll.addEventListener('click', () => {
+        $$('.date-group-section').forEach(sec => sec.classList.add('collapsed'));
+      });
+    }
   }
 
   // Initialize

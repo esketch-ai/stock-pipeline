@@ -279,6 +279,45 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.date-timeline-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.accordion-batch-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.batch-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
+.batch-icon {
+  font-size: 10px;
 }
 
 .date-timeline-title {
