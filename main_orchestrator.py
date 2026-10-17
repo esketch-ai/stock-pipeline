@@ -203,6 +203,24 @@ def run_pipeline(
     except Exception as exc:
         log.error("아카이브 실패(무시): %s", exc)
 
+    # ── STOCK ANALYSIS / FOLLOW UP 대시보드 자동 갱신 ──
+    try:
+        log.info("사후 시세 추적 (Follow-Up) 대시보드 자동 갱신 트리거...")
+        import subprocess
+        script = config.PROJECT_DIR / "update_public_dashboard.sh"
+        if script.exists():
+            res = subprocess.run(["/bin/zsh", str(script)], capture_output=True, text=True, cwd=str(config.PROJECT_DIR))
+            if res.returncode == 0:
+                log.info("Follow-Up 대시보드 자동 갱신 완료")
+            else:
+                log.warning("Follow-Up 스크립트 비정상 종료 (코드 %d): %s", res.returncode, res.stderr[:200])
+        else:
+            import pages_export
+            pages_export.export_dashboard()
+            log.info("Follow-Up 대시보드 자동 갱신 완료 (내부 모듈)")
+    except Exception as exc:
+        log.warning("Follow-Up 대시보드 자동 갱신 실패(무시): %s", exc)
+
     log.info("=" * 62)
     log.info("파이프라인 종료 — 총 %.1f분 소요", elapsed / 60)
     log.info("=" * 62)

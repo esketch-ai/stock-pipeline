@@ -1105,3 +1105,65 @@ body {
   color: var(--text-dim);
 }
 .empty-state .ico { font-size: 36px; margin-bottom: 8px; }
+
+/* ═════════════════════════════════════════════════════════════
+   사후 시세 추적 (Follow-Up) 탭 스타일
+   ═════════════════════════════════════════════════════════════ */
+.followup-admin-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+.followup-admin-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: 14px 20px;
+}
+.followup-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.followup-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #00f2fe;
+  background: rgba(0, 242, 254, 0.12);
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+}
+.followup-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.followup-desc {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+.followup-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.followup-frame-wrap {
+  width: 100%;
+  height: calc(100vh - 240px);
+  min-height: 700px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: #070b14;
+}
+.followup-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}

@@ -31,6 +31,9 @@
     <button class="tab-btn" data-tab="analytics">
       <span class="tab-icon">📊</span> 종목 분석 기록
     </button>
+    <button class="tab-btn" data-tab="followup">
+      <span class="tab-icon">📈</span> 사후 시세 추적 (Follow-Up)
+    </button>
     <button class="tab-btn" data-tab="operations">
       <span class="tab-icon">⚙️</span> 시스템 & 운영
     </button>
@@ -142,7 +145,31 @@
     </div>
   </section>
 
-  <!-- ═══════════════ 탭 3: 시스템 및 운영 (Operations) ═══════════════ -->
+  <!-- ═══════════════ 탭 3: 사후 시세 추적 (Follow-Up) ═══════════════ -->
+  <section class="tab-pane" id="pane-followup" hidden>
+    <div class="followup-admin-shell">
+      <div class="followup-admin-bar">
+        <div class="followup-meta">
+          <span class="followup-badge">LIVE TRACKING</span>
+          <span class="followup-title">YouTube 게시 영상 실측 사후 시세 추적기</span>
+          <span class="followup-desc">영상 제작 기준가격 대비 최신 거래일 종가 투명 검증</span>
+        </div>
+        <div class="followup-actions">
+          <button class="btn btn-secondary" id="btn-open-followup-ext" onclick="window.open('/followup', '_blank')">
+            <span class="btn-icon">🌐</span> 전체화면 열기
+          </button>
+          <button class="btn btn-primary" id="btn-trigger-followup-refresh">
+            <span class="btn-icon">⚡</span> KRX 최신 시세 갱신
+          </button>
+        </div>
+      </div>
+      <div class="followup-frame-wrap">
+        <iframe src="/followup" id="followup-iframe" class="followup-iframe" title="사후 시세 추적 대시보드"></iframe>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 탭 4: 시스템 및 운영 (Operations) ═══════════════ -->
   <section class="tab-pane" id="pane-operations" hidden>
     <div class="ops-grid">
       <!-- 1. 환경 및 진단 -->

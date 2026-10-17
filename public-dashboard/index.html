@@ -1,7 +1,197 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>종목 분석 · 이후의 기록</title><link rel="stylesheet" href="style.css"></head>
-<body><main><header><span class="eyebrow">STOCK ANALYSIS / FOLLOW UP</span><h1>분석 이후,<br>가격은 어떻게 달라졌을까요?</h1><p>영상 제작 당시의 기준가격부터 이후 거래일 종가까지, 같은 기준으로 기록합니다.</p><div id="updated" role="status">데이터를 불러오는 중입니다.</div></header>
-<section class="summary" id="summary"></section>
-<section class="controls"><label>종목 검색 <input id="search" type="search" placeholder="종목명 또는 코드"></label><label>정렬 <select id="sort"><option value="date">최근 제작순</option><option value="return">증감률 높은순</option><option value="loss">증감률 낮은순</option></select></label><button id="refresh">새로고침</button></section>
-<p class="hint">최신 종가는 기준가격 날짜의 종가도 표시합니다. D+1 / D+5 / D+20은 제작 이후 관측 거래일 수이며 기준가격 날짜는 제외합니다. 기존 영상의 제작 시각은 아카이브 저장 시각입니다.</p>
-<section id="cards" aria-live="polite"></section><footer><p id="policy"></p><p>확인된 모든 제작 기록을 표시합니다. 증감률은 실제 매매 수익률이나 향후 성과를 의미하지 않습니다. 시세는 매일 장 마감 후 갱신되며 마지막 시세 날짜를 확인해 주세요.</p></footer></main><script src="app.js"></script></body></html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STOCK ANALYSIS · FOLLOW UP | 유튜브 추천 종목 사후 시세 추적</title>
+  <meta name="description" content="AI 주식 분석 영상 추천 당시 기준가격부터 이후 일별 종가까지, 단 하나의 가감 없이 투명하게 시세를 추적합니다." />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="glow-bg glow-1"></div>
+  <div class="glow-bg glow-2"></div>
+
+  <main class="dashboard-shell">
+    <!-- ═══════════════ 헤더 영역 ═══════════════ -->
+    <header class="header">
+      <div class="header-top">
+        <div class="brand">
+          <div class="brand-badge">
+            <span class="live-dot"></span>
+            <span class="brand-tag">STOCK ANALYSIS &amp; VERIFICATION</span>
+          </div>
+          <h1 class="main-title">
+            유튜브 추천 종목 <span class="highlight-cyan">사후 시세 추적</span>
+          </h1>
+          <p class="subtitle">
+            영상 게시 당시의 기준가격부터 이후 거래일 종가까지, 단 하나의 왜곡 없이 투명하게 기록합니다.
+          </p>
+        </div>
+
+        <div class="header-status-box">
+          <div class="status-indicator" id="status-chip">
+            <span class="pulse-ring"></span>
+            <span class="status-text" id="updated-text">데이터 로딩 중...</span>
+          </div>
+          <div class="status-market-date" id="market-date">조회 기준: 대기 중</div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ 핵심 KPI 요약 카드 (4-Grid) ═══════════════ -->
+      <section class="kpi-section" id="summary-cards">
+        <div class="kpi-card">
+          <div class="kpi-label">
+            <span class="kpi-icon">🎬</span> 총 추적 영상
+          </div>
+          <div class="kpi-value-wrap">
+            <strong class="kpi-value" id="kpi-total">-</strong>
+            <span class="kpi-sub" id="kpi-total-sub">실제 게시 영상</span>
+          </div>
+          <div class="kpi-footer">YouTube 공개 종목 전수 집계</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">
+            <span class="kpi-icon">📈</span> 평균 수익률 (P&amp;L)
+          </div>
+          <div class="kpi-value-wrap">
+            <strong class="kpi-value" id="kpi-return">-</strong>
+            <span class="kpi-sub" id="kpi-return-sub">기준가 대비</span>
+          </div>
+          <div class="kpi-footer">최근 거래일 종가 단순 평균</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">
+            <span class="kpi-icon">🎯</span> 승률 (Win Rate)
+          </div>
+          <div class="kpi-value-wrap">
+            <strong class="kpi-value" id="kpi-winrate">-</strong>
+            <span class="kpi-sub" id="kpi-winrate-sub">상승 종목 비율</span>
+          </div>
+          <div class="kpi-footer">기준가 대비 플러스(+) 기록 종목</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">
+            <span class="kpi-icon">⚡</span> 시세 수신 상태
+          </div>
+          <div class="kpi-value-wrap">
+            <strong class="kpi-value" id="kpi-active">-</strong>
+            <span class="kpi-sub" id="kpi-active-sub">거래일 시세 수신</span>
+          </div>
+          <div class="kpi-footer" id="kpi-target-hits">목표가 달성 0건</div>
+        </div>
+      </section>
+    </header>
+
+    <!-- ═══════════════ 필터 및 정렬 컨트롤 ═══════════════ -->
+    <section class="controls-bar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="search-input" type="search" placeholder="종목명 또는 6자리 코드 검색 (예: 한화오션, 015260)" autocomplete="off" />
+      </div>
+
+      <!-- 아키타입 태그 필터 -->
+      <div class="archetype-filter" id="archetype-filters">
+        <button class="filter-chip active" data-archetype="all">전체</button>
+        <button class="filter-chip" data-archetype="저평가 가치 반등">저평가 반등</button>
+        <button class="filter-chip" data-archetype="성장 돌파">성장 돌파</button>
+        <button class="filter-chip" data-archetype="수급 반전">수급 반전</button>
+        <button class="filter-chip" data-archetype="수급 주도 추세">수급 주도 추세</button>
+        <button class="filter-chip" data-archetype="펀더멘털 재평가">재평가</button>
+      </div>
+
+      <div class="controls-right">
+        <!-- 성과 필터 -->
+        <select id="status-filter" class="custom-select" title="성과 상태 필터">
+          <option value="all">성과: 전체</option>
+          <option value="profit">수익 중 (+)</option>
+          <option value="loss">손실 중 (-)</option>
+          <option value="waiting">거래일 대기</option>
+        </select>
+
+        <!-- 정렬 셀렉트 -->
+        <select id="sort-select" class="custom-select" title="정렬 기준">
+          <option value="recent">최신 영상순</option>
+          <option value="return_desc">수익률 높은순 ↑</option>
+          <option value="return_asc">수익률 낮은순 ↓</option>
+          <option value="name">종목명 (가나다)</option>
+        </select>
+
+        <!-- 뷰 모드 토글 (카드 vs 테이블) -->
+        <div class="view-toggle">
+          <button class="view-btn active" id="view-card" title="카드 그리드 뷰">⊞</button>
+          <button class="view-btn" id="view-table" title="테이블 뷰">☰</button>
+        </div>
+
+        <button id="btn-refresh" class="btn-refresh" title="최신 시세 데이터 새로고침">
+          <span class="refresh-icon">⟳</span> 새로고침
+        </button>
+      </div>
+    </section>
+
+    <!-- 가이드 안내 뱃지 -->
+    <div class="guide-banner">
+      <span class="guide-icon">💡</span>
+      <span>
+        <strong>D+1 / D+5 / D+20</strong>은 영상 추천 이후 관측된 <strong>정규 거래일수</strong>입니다. 
+        기준가격은 영상 제작 당시의 스냅샷 종가이며, 매일 장 마감 후 및 파이프라인 배치 완료 시 자동 갱신됩니다.
+      </span>
+    </div>
+
+    <!-- ═══════════════ 종목 카드 그리드 뷰 ═══════════════ -->
+    <section class="cards-grid" id="cards-container" aria-live="polite">
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>최신 종목 시세 및 사후 기록을 분석 중입니다...</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════ 종목 테이블 뷰 (옵션 토글) ═══════════════ -->
+    <section class="table-container" id="table-container" hidden>
+      <div class="table-responsive">
+        <table class="fin-table">
+          <thead>
+            <tr>
+              <th>영상 / 종목</th>
+              <th>스토리 아키타입</th>
+              <th>추천일 (기준가)</th>
+              <th>최근 종가</th>
+              <th>누적 수익률</th>
+              <th>최고 수익률</th>
+              <th>D+1</th>
+              <th>D+3</th>
+              <th>D+5</th>
+              <th>D+20</th>
+              <th>목표가 상태</th>
+              <th>유튜브</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════ 푸터 ═══════════════ -->
+    <footer class="footer">
+      <div class="footer-content">
+        <p class="footer-policy" id="policy-text">
+          시세는 한국거래소(KRX) 정규 거래 종가를 기준으로 매일 자동 갱신됩니다.
+        </p>
+        <p class="footer-disclaimer">
+          본 대시보드의 수익률은 추천 영상 발행 시점 종가와 이후 거래일 종가 간의 단순 변동률이며, 
+          실제 매매 체결 가격이나 미래 투자 수익률을 보장하지 않습니다. 모든 투자의 책임은 투자자 본인에게 있습니다.
+        </p>
+      </div>
+    </footer>
+  </main>
+
+  <!-- 툴팁 레이어 -->
+  <div class="chart-tooltip" id="chart-tooltip" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

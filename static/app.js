@@ -130,6 +130,10 @@ function init() {
   const btnRefreshLog = $('#btn-refresh-log');
   if (btnRefreshLog) btnRefreshLog.addEventListener('click', fetchLogOnce);
 
+  // Follow-up 시세 갱신 버튼
+  const btnTriggerFollowup = $('#btn-trigger-followup-refresh');
+  if (btnTriggerFollowup) btnTriggerFollowup.addEventListener('click', triggerFollowupRefresh);
+
   // 7. 모달 닫기 리스너
   $('#dialog-close').addEventListener('click', closeDialog);
   $('#app-dialog').addEventListener('click', (e) => {
@@ -164,11 +168,52 @@ function switchTab(tabId) {
 
   if (tabId === 'analytics') {
     loadAnalytics();
+  } else if (tabId === 'followup') {
+    const iframe = $('#followup-iframe');
+    if (iframe) iframe.src = `/followup?t=${Date.now()}`;
   } else if (tabId === 'operations') {
     loadDiagnostics();
     startLogStream();
   } else {
     stopLogStream();
+  }
+}
+
+/* Follow-Up 사후 시세 추적 최신 종가 갱신 */
+async function triggerFollowupRefresh() {
+  const btn = $('#btn-trigger-followup-refresh');
+  if (btn) btn.disabled = true;
+  toast('KRX 최신 시세 갱신 작업을 시작합니다...', 'ok');
+  try {
+    const r = await fetch('/api/followup/refresh', { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    if (data.job) {
+      toast(`시세 갱신 작업 등록: ${data.job.label}`, 'ok');
+      const timer = setInterval(async () => {
+        try {
+          const jr = await fetch(`/api/jobs/${data.job.id}`);
+          if (!jr.ok) return;
+          const jd = await jr.json();
+          if (jd.status === 'done') {
+            clearInterval(timer);
+            toast('사후 시세 추적 대시보드가 갱신되었습니다.', 'ok');
+            const iframe = $('#followup-iframe');
+            if (iframe) iframe.src = `/followup?t=${Date.now()}`;
+            if (btn) btn.disabled = false;
+          } else if (jd.status === 'failed') {
+            clearInterval(timer);
+            toast(`시세 갱신 실패: ${jd.message || '오류 발생'}`, 'err');
+            if (btn) btn.disabled = false;
+          }
+        } catch {
+          // ignore polling error
+        }
+      }, 2000);
+    }
+  } catch (e) {
+    toast(`시세 갱신 요청 실패: ${e.message}`, 'err');
+    if (btn) btn.disabled = false;
   }
 }
 

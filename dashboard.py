@@ -42,6 +42,7 @@ THUMB_DIR = config.CACHE_DIR / "_thumbs"
 THUMB_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=str(PROJECT_DIR / "static")), name="static")
+app.mount("/followup", StaticFiles(directory=str(PROJECT_DIR / "public-dashboard"), html=True), name="followup")
 
 _TICKER_RE = re.compile(r"^[A-Za-z0-9_.-]{1,20}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -628,6 +629,39 @@ def _refresh_series(ticker: str):
     except Exception as exc:
         log.warning("series 갱신 실패(%s) — PNG 폴백으로 진행: %s", ticker, exc)
         return None
+
+
+@app.get("/api/followup")
+def api_get_followup():
+    """STOCK ANALYSIS / FOLLOW UP 사후 시세 데이터 반환"""
+    data_file = PROJECT_DIR / "public-dashboard" / "data.json"
+    if not data_file.exists():
+        import pages_export
+        pages_export.export_dashboard()
+    try:
+        with open(data_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        raise HTTPException(500, f"Follow-up 데이터 로드 실패: {exc}")
+
+
+@app.post("/api/followup/refresh")
+def api_refresh_followup():
+    """사후 시세 추적(Follow-Up) 최신 종가 비동기 갱신 작업 실행"""
+    def _fn(step):
+        step("YouTube 게시 영상 확인 및 시세 갱신 중")
+        script = PROJECT_DIR / "update_public_dashboard.sh"
+        if script.exists():
+            res = subprocess.run([str(script)], capture_output=True, text=True, cwd=str(PROJECT_DIR))
+            if res.returncode != 0:
+                raise RuntimeError(f"스크립트 실행 오류: {res.stderr[:200]}")
+        else:
+            import pages_export
+            pages_export.export_dashboard()
+        step("사후 시세 추적 갱신 완료")
+
+    job = _start_job("followup_refresh", "사후 시세 추적 갱신", _fn)
+    return {"job": job.as_dict()}
 
 
 @app.post("/api/actions/qc/{date}/{ticker}")
