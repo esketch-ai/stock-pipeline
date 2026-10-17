@@ -351,6 +351,78 @@ def api_jobs() -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────
+# 종목 분석 데이터베이스 (Analytics)
+# ─────────────────────────────────────────────────────────
+
+
+@app.get("/api/analytics")
+def api_analytics(limit: int = 50, q: str = "") -> dict:
+    """종목 분석 데이터베이스 조회 (심층 분석 지표 및 컨센서스)."""
+    import stock_analytics_db
+    conn = stock_analytics_db.get_db_connection()
+    cur = conn.cursor()
+    query = """
+        SELECT p.ticker, p.name, p.market, p.industry_name, p.current_price,
+               p.market_cap_eok, p.summary_comment1, p.summary_comment2, p.summary_comment3,
+               p.updated_at,
+               v.pbr, v.bps, v.per, v.eps, v.consensus_target, v.consensus_upside_pct,
+               v.consensus_opinion, v.report_count,
+               m.overall_score, m.selection_headline, m.valuation_attractiveness
+        FROM company_profile p
+        LEFT JOIN valuation_consensus v ON p.ticker = v.ticker
+        LEFT JOIN market_evaluation_report m ON p.ticker = m.ticker
+    """
+    params = []
+    if q:
+        query += " WHERE p.name LIKE ? OR p.ticker LIKE ? OR p.industry_name LIKE ?"
+        kw = f"%{q}%"
+        params.extend([kw, kw, kw])
+    query += " ORDER BY p.updated_at DESC, p.market_cap_eok DESC LIMIT ?"
+    params.append(limit)
+    cur.execute(query, params)
+    rows = [dict(r) for r in cur.fetchall()]
+    return {"total": len(rows), "items": rows}
+
+
+@app.get("/api/analytics/{ticker}")
+def api_analytics_detail(ticker: str) -> dict:
+    """단일 종목의 심층 분석 상세 (재무, 주주, 기술지표, 평가 리포트)."""
+    _check_ticker(ticker)
+    import stock_analytics_db
+    conn = stock_analytics_db.get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM company_profile WHERE ticker = ?", (ticker,))
+    profile = cur.fetchone()
+    if not profile:
+        raise HTTPException(404, "종목 분석 데이터가 없습니다.")
+
+    cur.execute("SELECT * FROM valuation_consensus WHERE ticker = ?", (ticker,))
+    val = cur.fetchone()
+
+    cur.execute("SELECT * FROM shareholders_info WHERE ticker = ?", (ticker,))
+    sh = cur.fetchone()
+
+    cur.execute("SELECT * FROM financial_metrics WHERE ticker = ? ORDER BY id DESC", (ticker,))
+    fins = [dict(r) for r in cur.fetchall()]
+
+    cur.execute("SELECT * FROM technical_analytics WHERE ticker = ? ORDER BY date DESC LIMIT 1", (ticker,))
+    tech = cur.fetchone()
+
+    cur.execute("SELECT * FROM market_evaluation_report WHERE ticker = ?", (ticker,))
+    eval_rep = cur.fetchone()
+
+    return {
+        "profile": dict(profile) if profile else {},
+        "valuation": dict(val) if val else {},
+        "shareholders": dict(sh) if sh else {},
+        "financials": fins,
+        "technical": dict(tech) if tech else {},
+        "market_evaluation": dict(eval_rep) if eval_rep else {},
+    }
+
+
+# ─────────────────────────────────────────────────────────
 # 대본
 # ─────────────────────────────────────────────────────────
 
