@@ -584,6 +584,19 @@ body {
   border-radius: 4px;
 }
 
+.guide-badge-clock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: rgba(0, 242, 254, 0.2);
+  border: 1px solid rgba(0, 242, 254, 0.4);
+  color: var(--accent-cyan);
+  font-size: 11px;
+  border-radius: 4px;
+}
+
 /* ═══════════════ 일자별 그룹 뷰 (모드 1) ═══════════════ */
 .grouped-container {
   display: flex;

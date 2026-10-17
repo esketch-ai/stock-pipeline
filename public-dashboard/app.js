@@ -187,7 +187,9 @@
     if (summary.generatedAt) {
       $('#updated-text').textContent = `최근 갱신: ${summary.generatedAt.replace('T', ' ').slice(0, 19)}`;
     }
-    if (summary.marketThrough) {
+    if (summary.marketSessionText) {
+      $('#market-date').textContent = `${summary.marketSessionText} · 종가 기준: ${summary.marketThrough || ''}`;
+    } else if (summary.marketThrough) {
       $('#market-date').textContent = `거래일 종가 기준: ${summary.marketThrough}`;
     }
   }

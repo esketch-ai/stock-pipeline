@@ -652,12 +652,12 @@ def api_refresh_followup():
         step("YouTube 게시 영상 확인 및 시세 갱신 중")
         script = PROJECT_DIR / "update_public_dashboard.sh"
         if script.exists():
-            res = subprocess.run([str(script)], capture_output=True, text=True, cwd=str(PROJECT_DIR))
+            res = subprocess.run([str(script), "--force"], capture_output=True, text=True, cwd=str(PROJECT_DIR))
             if res.returncode != 0:
                 raise RuntimeError(f"스크립트 실행 오류: {res.stderr[:200]}")
         else:
             import pages_export
-            pages_export.export_dashboard()
+            pages_export.main()
         step("사후 시세 추적 갱신 완료")
 
     job = _start_job("followup_refresh", "사후 시세 추적 갱신", _fn)

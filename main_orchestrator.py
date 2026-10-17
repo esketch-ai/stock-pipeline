@@ -209,7 +209,7 @@ def run_pipeline(
         import subprocess
         script = config.PROJECT_DIR / "update_public_dashboard.sh"
         if script.exists():
-            res = subprocess.run(["/bin/zsh", str(script)], capture_output=True, text=True, cwd=str(config.PROJECT_DIR))
+            res = subprocess.run(["/bin/zsh", str(script), "--force"], capture_output=True, text=True, cwd=str(config.PROJECT_DIR))
             if res.returncode == 0:
                 log.info("Follow-Up 대시보드 자동 갱신 완료")
             else:

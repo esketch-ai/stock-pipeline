@@ -15,7 +15,7 @@ import math
 import re
 import ssl
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -25,12 +25,40 @@ ROOT = Path(__file__).resolve().parent
 STATE = ROOT / "state" / "price_tracking.json"
 SITE = ROOT / "public-dashboard"
 KST = ZoneInfo("Asia/Seoul")
+ET = ZoneInfo("America/New_York")
 _SSL_CTX = ssl._create_unverified_context()
 _NAVER_HDR = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
 
 
+def is_us_stock(record: dict) -> bool:
+    """종목이 미국 주식인지 여부 판별 (영문 티커 또는 NASDAQ/NYSE 마켓)."""
+    ticker = str(record.get("ticker", "")).strip().upper()
+    market = str(record.get("market", "")).strip().upper()
+    if re.match(r"^[A-Z]{1,5}(\.[A-Z])?$", ticker):
+        return True
+    if any(m in market for m in ("NASDAQ", "NYSE", "AMEX", "US", "미국")):
+        return True
+    return False
+
+
+def is_kr_market_open(dt_kst: datetime) -> bool:
+    """한국 정규 장 시간 판별: 평일(월~금) 09:00 ~ 17:00 KST."""
+    if dt_kst.weekday() >= 5:  # 토요일(5), 일요일(6)
+        return False
+    t = dt_kst.time()
+    return time(9, 0) <= t <= time(17, 0)
+
+
+def is_us_market_open(dt_et: datetime) -> bool:
+    """미국 정규 장 시간 판별: 평일(월~금) 09:30 ~ 16:30 ET (한국시간 야간/새벽)."""
+    if dt_et.weekday() >= 5:  # 토요일(5), 일요일(6)
+        return False
+    t = dt_et.time()
+    return time(9, 30) <= t <= time(16, 30)
+
+
 def fetch_naver_realtime_price(ticker: str) -> float | None:
-    """네이버 증권 모바일 API로부터 장중 실시간 현재가/최근 체결가 수집."""
+    """네이버 증권 모바일 API로부터 국내 장중 실시간 현재가/최근 체결가 수집."""
     try:
         url = f"https://m.stock.naver.com/api/stock/{ticker}/basic"
         req = urllib.request.Request(url, headers=_NAVER_HDR)
@@ -39,6 +67,35 @@ def fetch_naver_realtime_price(ticker: str) -> float | None:
             cp = data.get("closePrice")
             if cp:
                 return float(str(cp).replace(",", ""))
+    except Exception:
+        pass
+    return None
+
+
+def fetch_us_realtime_price(ticker: str) -> float | None:
+    """미국 주식 실시간 현재가 수집 (네이버 해외증권 API 및 Yahoo Finance 차트 API 폴백)."""
+    clean_ticker = ticker.split(".")[0].upper()
+    for suffix in (".O", ".N", ".A"):
+        try:
+            url = f"https://api.stock.naver.com/stock/{clean_ticker}{suffix}/basic"
+            req = urllib.request.Request(url, headers=_NAVER_HDR)
+            with urllib.request.urlopen(req, context=_SSL_CTX, timeout=3) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                cp = data.get("closePrice")
+                if cp:
+                    return float(str(cp).replace(",", ""))
+        except Exception:
+            continue
+
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{clean_ticker}?interval=1d&range=5d"
+        req = urllib.request.Request(url, headers=_NAVER_HDR)
+        with urllib.request.urlopen(req, context=_SSL_CTX, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            meta = data["chart"]["result"][0]["meta"]
+            price_val = meta.get("regularMarketPrice")
+            if price_val:
+                return float(price_val)
     except Exception:
         pass
     return None
@@ -216,16 +273,27 @@ def refresh_record(record: dict, fetch_func, end_date, now_iso: str) -> None:
             latest = max(quotes, key=lambda p: p["date"])
             record["latestQuote"] = latest
 
-        # 평일 장중(09:00~) 실시간 현재가 보강 (KRX에 오늘자 종가가 아직 미반영된 경우)
+        # 실시간 현재가 보강 (한국 장중: 09:00~17:00 KST, 미국 장중: 09:30~16:30 ET)
         now_dt = datetime.fromisoformat(now_iso)
         today_str = now_dt.strftime("%Y-%m-%d")
-        if now_dt.weekday() < 5 and now_dt.hour >= 9:
-            if not any(p["date"] == today_str for p in quotes):
-                rt_price = fetch_naver_realtime_price(record["ticker"])
-                if rt_price:
-                    record["latestQuote"] = {"date": today_str, "close": rt_price, "isRealtime": True}
-                    if baseline_date.isoformat() < today_str:
-                        merged[today_str] = {"date": today_str, "close": rt_price}
+        is_us = is_us_stock(record)
+
+        if is_us:
+            # 미국 주식: 미국 장중 실시간 현재가 수집
+            rt_price = fetch_us_realtime_price(record["ticker"])
+            if rt_price:
+                record["latestQuote"] = {"date": today_str, "close": rt_price, "isRealtime": True}
+                if baseline_date.isoformat() < today_str:
+                    merged[today_str] = {"date": today_str, "close": rt_price}
+        else:
+            # 한국 주식: 평일 09:00~17:00 장중 실시간 현재가 보강
+            if now_dt.weekday() < 5 and now_dt.hour >= 9:
+                if not any(p["date"] == today_str for p in quotes):
+                    rt_price = fetch_naver_realtime_price(record["ticker"])
+                    if rt_price:
+                        record["latestQuote"] = {"date": today_str, "close": rt_price, "isRealtime": True}
+                        if baseline_date.isoformat() < today_str:
+                            merged[today_str] = {"date": today_str, "close": rt_price}
 
         record["history"] = sorted(merged.values(), key=lambda p: p["date"])
         record["status"] = "ok" if (quotes or record.get("latestQuote")) else "no-new-data"
@@ -304,11 +372,24 @@ def format_public_item(record: dict) -> dict:
         for n in (1, 3, 5, 10, 20)
     }
 
-    # 외부 증권 포털 연계 URL
+    # 외부 증권 포털 연계 URL (한국 vs 미국 구분)
     ticker = record.get("ticker", "")
-    out["naverFinanceUrl"] = f"https://finance.naver.com/item/main.naver?code={ticker}"
-    out["tossUrl"] = f"https://wts.tossinvest.com/stocks/{ticker}"
-    out["daumFinanceUrl"] = f"https://finance.daum.net/quotes/A{ticker}"
+    is_us = is_us_stock(record)
+    out["isUsStock"] = is_us
+    clean = ticker.split(".")[0].upper()
+    if is_us:
+        out["market"] = record.get("market") or "NASDAQ"
+        out["currency"] = "$"
+        out["naverFinanceUrl"] = f"https://m.stock.naver.com/worldstock/stock/{clean}"
+        out["tossUrl"] = f"https://wts.tossinvest.com/stocks/{clean}"
+        out["yahooFinanceUrl"] = f"https://finance.yahoo.com/quote/{clean}"
+        out["daumFinanceUrl"] = f"https://finance.daum.net/global/quotes/US.{clean}"
+    else:
+        out["currency"] = "원"
+        out["naverFinanceUrl"] = f"https://finance.naver.com/item/main.naver?code={ticker}"
+        out["tossUrl"] = f"https://wts.tossinvest.com/stocks/{ticker}"
+        out["yahooFinanceUrl"] = f"https://finance.yahoo.com/quote/{ticker}.KS"
+        out["daumFinanceUrl"] = f"https://finance.daum.net/quotes/A{ticker}"
     return out
 
 
@@ -316,9 +397,23 @@ def main():
     parser = argparse.ArgumentParser(description="YouTube 업로드 영상 기준 사후 시세 추적 및 대시보드 갱신")
     parser.add_argument("--offline", action="store_true", help="저장된 시세 이력으로만 대시보드 재생성")
     parser.add_argument("--all", action="store_true", help="유튜브 미게시 영상도 모두 포함")
+    parser.add_argument("--force", action="store_true", help="장 운영시간 여부와 무관하게 전체 강제 갱신")
     args = parser.parse_args()
 
-    now = datetime.now(KST)
+    now_kst = datetime.now(KST)
+    now_et = datetime.now(ET)
+
+    kr_open = is_kr_market_open(now_kst)
+    us_open = is_us_market_open(now_et)
+
+    # 1. 정규 거래 시간 게이팅 (한국 09:00~17:00 KST, 미국 09:30~16:30 ET)
+    if not args.force and not args.offline and not kr_open and not us_open:
+        print(f"⏸️ [1시간 스케줄 스킵] 현재 정규 거래 시간이 아닙니다.")
+        print(f"   - 한국 주식 (09:00~17:00 KST): 현재 {now_kst.strftime('%H:%M:%S')} {'(열림 🟢)' if kr_open else '(닫힘 ⏸️)'}")
+        print(f"   - 미국 주식 (09:30~16:30 ET): 현재 {now_et.strftime('%H:%M:%S')} {'(열림 🟢)' if us_open else '(닫힘 ⏸️)'}")
+        print(f"   ※ 다음 장 시작 시 1시간 단위 갱신이 자동 진행됩니다. (수동 강제 실행: --force)")
+        return
+
     records = {}
     if STATE.exists():
         try:
@@ -331,22 +426,20 @@ def main():
     print(f"📡 YouTube 게시 영상 검색: 신규 {new_found}건 발굴 (총 {len(records)}개 추적 대상)")
 
     # 갱신 기준일 계산:
-    # 평일(월~금) 09:00 이후면 당일까지 조회 대상 (장중 실시간 반영)
-    # 주말 또는 평일 장 시작 전이면 최근 직전 거래일 기준
-    if now.weekday() < 5 and now.hour >= 9:
-        end = now.date()
+    if now_kst.weekday() < 5 and now_kst.hour >= 9:
+        end = now_kst.date()
     else:
         days_back = 1
-        if now.weekday() == 6:       # 일요일 -> 2일 전(금)
+        if now_kst.weekday() == 6:       # 일요일 -> 2일 전(금)
             days_back = 2
-        elif now.weekday() == 0:     # 월요일 아침 -> 3일 전(금)
+        elif now_kst.weekday() == 0:     # 월요일 아침 -> 3일 전(금)
             days_back = 3
-        elif now.weekday() == 5:     # 토요일 -> 1일 전(금)
+        elif now_kst.weekday() == 5:     # 토요일 -> 1일 전(금)
             days_back = 1
-        end = now.date() - timedelta(days=days_back)
+        end = now_kst.date() - timedelta(days=days_back)
 
     if not args.offline:
-        print(f"📈 최신 시세 수집 중 (기준일 ~ {end})...")
+        print(f"📈 시세 수집 가동 — 한국장: {'열림 🟢' if kr_open else '닫힘 ⏸️'} | 미국장: {'열림 🟢' if us_open else '닫힘 ⏸️'} (기준일 ~ {end})")
         try:
             from pykrx import stock
 
@@ -359,14 +452,22 @@ def main():
             import naver_finance
 
             def fetch_ohlcv(ticker: str, start: datetime.date, end_d: datetime.date):
-                # 네이버 금융 폴백
                 candles = naver_finance.fetch_chart_data(ticker, days=60)
                 return [(c["date"], float(c["close"])) for c in candles if start.isoformat() <= c["date"] <= end_d.isoformat()]
 
+        updated_count = 0
         for i, rec in enumerate(records.values(), 1):
-            refresh_record(rec, fetch_ohlcv, end, now.isoformat(timespec="seconds"))
-            if i % 5 == 0 or i == len(records):
-                print(f"  [{i}/{len(records)}] {rec.get('name', rec['ticker'])} 시세 갱신 완료")
+            is_us = is_us_stock(rec)
+            # 한국 주식은 한국 장중(09:00~17:00 KST) 또는 force 일 때만 갱신
+            # 미국 주식은 미국 장중(09:30~16:30 ET) 또는 force 일 때만 갱신
+            should_refresh = args.force or (is_us and us_open) or (not is_us and kr_open)
+            if not should_refresh:
+                continue
+
+            refresh_record(rec, fetch_ohlcv, end, now_kst.isoformat(timespec="seconds"))
+            updated_count += 1
+            if updated_count % 5 == 0 or i == len(records):
+                print(f"  [{updated_count}/{len(records)}] {rec.get('name', rec['ticker'])} 시세 갱신 완료 ({'US' if is_us else 'KR'})")
 
     write_json(STATE, records)
 
@@ -382,6 +483,14 @@ def main():
     win_rate = round((positive_count / len(with_return)) * 100, 1) if with_return else 0.0
     target_hits = sum(1 for it in formatted_items if "달성" in it.get("targetStatus", ""))
 
+    session_desc = []
+    if kr_open:
+        session_desc.append("한국 시장 장중 (09:00~17:00 KST)")
+    if us_open:
+        session_desc.append("미국 시장 장중 (09:30~16:30 ET)")
+    if not session_desc:
+        session_desc.append("정규 시장 마감 (대기)")
+
     summary_stats = {
         "totalTracked": len(formatted_items),
         "activeQuotes": len(with_return),
@@ -389,13 +498,15 @@ def main():
         "winRatePct": win_rate,
         "targetHitsCount": target_hits,
         "marketThrough": end.isoformat(),
-        "generatedAt": now.isoformat(timespec="seconds"),
+        "generatedAt": now_kst.isoformat(timespec="seconds"),
+        "krMarketOpen": kr_open,
+        "usMarketOpen": us_open,
+        "marketSessionText": " / ".join(session_desc),
     }
 
-    # public-dashboard/data.json 저장
     output_data = {
         "summary": summary_stats,
-        "pricePolicy": "YouTube 영상 추천 당시 종가 대비 미조정 일별 종가 수익률입니다. D+N은 추천일 이후 관측된 거래일 기준입니다.",
+        "pricePolicy": "YouTube 영상 추천 당시 종가 대비 미조정 일별 종가 수익률입니다. 한국 주식은 09:00~17:00 KST, 미국 주식은 09:30~16:30 ET 동안 1시간마다 갱신됩니다.",
         "items": formatted_items,
     }
     write_json(SITE / "data.json", output_data)

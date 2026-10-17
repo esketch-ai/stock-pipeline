@@ -3,7 +3,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 ROOT="${0:A:h}"
 cd "$ROOT"
-"$ROOT/venv/bin/python3" pages_export.py
+"$ROOT/venv/bin/python3" pages_export.py "$@"
 # 배포 전용 저장소에는 공개용 파일만 복사한다.
 REPO="$ROOT/pages-deploy"
 if [[ -d "$REPO/.git" ]]; then
