@@ -1,14 +1,15 @@
 /* ═════════════════════════════════════════════════════════════
    STOCK ANALYSIS · FOLLOW UP DASHBOARD
-   Modern Dark Fintech UI/UX Stylesheet
+   Modern Dark Fintech UI/UX Stylesheet (Revamped)
    ═════════════════════════════════════════════════════════════ */
 
 :root {
   --bg-base: #070b14;
   --bg-card: rgba(15, 23, 42, 0.78);
-  --bg-card-hover: rgba(22, 34, 60, 0.88);
+  --bg-card-hover: rgba(22, 34, 60, 0.92);
   --bg-secondary: #0f172a;
   --bg-surface: #1e293b;
+  --bg-surface-hover: #293548;
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-medium: rgba(255, 255, 255, 0.16);
   --border-focus: #00f2fe;
@@ -22,19 +23,22 @@
   /* Financial Color Tokens (KR Stock: Red=Up, Blue=Down) */
   --color-up: #f43f5e;           /* 상승 코랄 레드 */
   --color-up-bg: rgba(244, 63, 94, 0.12);
-  --color-up-border: rgba(244, 63, 94, 0.28);
+  --color-up-border: rgba(244, 63, 94, 0.3);
   --color-down: #3b82f6;         /* 하락 스카이 블루 */
   --color-down-bg: rgba(59, 130, 246, 0.12);
-  --color-down-border: rgba(59, 130, 246, 0.28);
+  --color-down-border: rgba(59, 130, 246, 0.3);
   --color-neutral: #94a3b8;
   --color-neutral-bg: rgba(148, 163, 184, 0.1);
 
-  /* Accents */
+  /* Brand Accents */
   --accent-cyan: #00f2fe;
   --accent-cyan-bg: rgba(0, 242, 254, 0.12);
   --accent-emerald: #10b981;
   --accent-amber: #f59e0b;
-  --accent-purple: #a855f7;
+  --naver-green: #03c75a;
+  --naver-green-hover: #00b04e;
+  --youtube-red: #ff0000;
+  --toss-blue: #3182f6;
 
   /* Fonts */
   --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
@@ -61,7 +65,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Background Atmospheric Glow */
+/* Atmospheric Glow */
 .glow-bg {
   position: fixed;
   width: 600px;
@@ -86,14 +90,14 @@ body {
 .dashboard-shell {
   position: relative;
   z-index: 1;
-  max-width: 1360px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 48px 24px 80px;
+  padding: 40px 24px 80px;
 }
 
 /* ═══════════════ 헤더 영역 ═══════════════ */
 .header {
-  margin-bottom: 36px;
+  margin-bottom: 28px;
 }
 
 .header-top {
@@ -101,7 +105,7 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   gap: 24px;
-  padding-bottom: 28px;
+  padding-bottom: 24px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -113,7 +117,7 @@ body {
   border: 1px solid rgba(0, 242, 254, 0.25);
   padding: 4px 12px;
   border-radius: 9999px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .live-dot {
@@ -139,11 +143,11 @@ body {
 }
 
 .main-title {
-  font-size: clamp(28px, 3.4vw, 42px);
-  font-weight: 800;
+  font-size: clamp(26px, 3.2vw, 40px);
+  font-weight: 850;
   letter-spacing: -1.2px;
   line-height: 1.25;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .highlight-cyan {
@@ -153,9 +157,9 @@ body {
 }
 
 .subtitle {
-  font-size: 15px;
+  font-size: 14.5px;
   color: var(--text-muted);
-  max-width: 680px;
+  max-width: 760px;
 }
 
 .header-status-box {
@@ -195,15 +199,15 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .kpi-card {
   background: var(--bg-card);
   backdrop-filter: blur(14px);
   border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  padding: 20px 22px;
+  border-radius: 14px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -223,7 +227,7 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .kpi-icon {
@@ -238,8 +242,8 @@ body {
 }
 
 .kpi-value {
-  font-size: 32px;
-  font-weight: 800;
+  font-size: 30px;
+  font-weight: 850;
   letter-spacing: -0.8px;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
@@ -258,13 +262,110 @@ body {
   margin-top: 4px;
 }
 
+/* ═══════════════ 일자별 타임라인 네비게이터 ═══════════════ */
+.date-timeline-bar {
+  background: var(--bg-card);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.date-timeline-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.date-timeline-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-timeline-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  background: var(--accent-cyan-bg);
+  padding: 2px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 242, 254, 0.25);
+}
+
+.date-chips-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.date-chips-wrap::-webkit-scrollbar {
+  height: 4px;
+}
+.date-chips-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+.date-chip {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.date-chip:hover {
+  background: var(--bg-surface);
+  color: var(--text-main);
+  border-color: var(--border-medium);
+}
+
+.date-chip.active {
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.2));
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
+}
+
+.date-chip-badge {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.date-chip.active .date-chip-badge {
+  background: var(--accent-cyan);
+  color: #070b14;
+}
+
 /* ═══════════════ 컨트롤 바 (검색/필터/정렬) ═══════════════ */
 .controls-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   background: var(--bg-card);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
@@ -275,8 +376,8 @@ body {
 
 .search-wrap {
   position: relative;
-  flex: 1 1 260px;
-  max-width: 380px;
+  flex: 1 1 280px;
+  max-width: 400px;
 }
 
 .search-icon {
@@ -294,9 +395,9 @@ body {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   color: var(--text-main);
-  padding: 10px 14px 10px 36px;
+  padding: 10px 36px 10px 36px;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 13.5px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -304,6 +405,30 @@ body {
 #search-input:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(0, 242, 254, 0.15);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--text-muted);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.search-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .archetype-filter {
@@ -342,7 +467,7 @@ body {
 .controls-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .custom-select {
@@ -367,21 +492,20 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 2px;
+  gap: 2px;
 }
 
 .view-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 15px;
-  width: 32px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .view-btn.active {
@@ -402,15 +526,12 @@ body {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .btn-refresh:hover {
   background: linear-gradient(135deg, rgba(0, 242, 254, 0.25), rgba(79, 172, 254, 0.25));
   transform: translateY(-1px);
-}
-
-.btn-refresh:active .refresh-icon {
-  transform: rotate(180deg);
 }
 
 .refresh-icon {
@@ -420,22 +541,136 @@ body {
 /* 가이드 배너 */
 .guide-banner {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  background: rgba(30, 41, 59, 0.5);
+  gap: 16px;
+  background: rgba(30, 41, 59, 0.45);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  padding: 10px 16px;
+  padding: 10px 18px;
   font-size: 12px;
   color: var(--text-muted);
   margin-bottom: 24px;
 }
 
-.guide-icon {
-  font-size: 15px;
+.guide-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* ═══════════════ 종목 카드 그리드 뷰 ═══════════════ */
+.guide-badge-naver {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: var(--naver-green);
+  color: #fff;
+  font-weight: 900;
+  font-size: 11px;
+  border-radius: 4px;
+}
+
+.guide-badge-yt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: var(--youtube-red);
+  color: #fff;
+  font-size: 10px;
+  border-radius: 4px;
+}
+
+/* ═══════════════ 일자별 그룹 뷰 (모드 1) ═══════════════ */
+.grouped-container {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.date-group-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.date-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.6);
+  border-left: 4px solid var(--accent-cyan);
+  border-top: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.date-group-header:hover {
+  background: rgba(22, 34, 60, 0.8);
+}
+
+.date-group-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.date-group-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.3px;
+}
+
+.date-group-badge-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.date-group-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.date-group-avg {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.date-group-toggle-icon {
+  font-size: 12px;
+  color: var(--text-sub);
+  transition: transform 0.2s ease;
+}
+
+.date-group-section.collapsed .date-group-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.date-group-section.collapsed .date-group-grid {
+  display: none;
+}
+
+.date-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 18px;
+}
+
+/* ═══════════════ 종목 카드 그리드 뷰 (모드 2) ═══════════════ */
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
@@ -447,10 +682,10 @@ body {
   backdrop-filter: blur(14px);
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
-  padding: 20px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   transition: transform 0.25s var(--ease-smooth), border-color 0.25s ease, box-shadow 0.25s ease;
   position: relative;
   overflow: hidden;
@@ -466,7 +701,7 @@ body {
 /* 상단 메타 & 썸네일 */
 .card-header-row {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   align-items: center;
 }
 
@@ -499,7 +734,7 @@ body {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
-  opacity: 0.8;
+  opacity: 0.85;
   transition: opacity 0.2s ease, background 0.2s ease;
 }
 
@@ -531,6 +766,7 @@ body {
   align-items: center;
   gap: 6px;
   margin-bottom: 4px;
+  flex-wrap: wrap;
 }
 
 .badge-mkt {
@@ -556,12 +792,12 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .stock-name {
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 850;
   letter-spacing: -0.5px;
   color: var(--text-main);
   white-space: nowrap;
@@ -575,9 +811,9 @@ body {
   color: var(--text-sub);
 }
 
-.stock-created-at {
+.stock-date-badge {
   font-size: 11px;
-  color: var(--text-dim);
+  color: var(--text-sub);
 }
 
 /* 핵심 가격 & P&L 수익률 뱃지 섹션 */
@@ -588,7 +824,7 @@ body {
   background: rgba(11, 18, 32, 0.7);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 14px 18px;
+  padding: 12px 16px;
 }
 
 .price-col {
@@ -603,15 +839,15 @@ body {
 }
 
 .price-num {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 750;
   font-variant-numeric: tabular-nums;
   color: var(--text-main);
 }
 
 .price-arrow {
   color: var(--text-dim);
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .pnl-badge {
@@ -619,13 +855,13 @@ body {
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
-  padding: 6px 14px;
+  padding: 6px 12px;
   border-radius: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .pnl-rate {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 850;
   letter-spacing: -0.5px;
   line-height: 1.1;
@@ -633,31 +869,115 @@ body {
 
 .pnl-sub {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
 /* Tone Classes */
-.up {
-  color: var(--color-up);
-}
+.up { color: var(--color-up); }
 .pnl-badge.up {
   background: var(--color-up-bg);
   border: 1px solid var(--color-up-border);
 }
-.down {
-  color: var(--color-down);
-}
+.down { color: var(--color-down); }
 .pnl-badge.down {
   background: var(--color-down-bg);
   border: 1px solid var(--color-down-border);
 }
-.neutral {
-  color: var(--color-neutral);
-}
+.neutral { color: var(--color-neutral); }
 .pnl-badge.neutral {
   background: var(--color-neutral-bg);
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 외부 증권 포털 & 유튜브 퀵 링크 바 (핵심 추가) */
+.portal-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.naver-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--naver-green);
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 7px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  flex: 1 1 auto;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(3, 199, 90, 0.3);
+}
+
+.naver-btn:hover {
+  background: var(--naver-green-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(3, 199, 90, 0.45);
+}
+
+.naver-icon {
+  font-weight: 900;
+  font-size: 11px;
+  background: #fff;
+  color: var(--naver-green);
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+}
+
+.yt-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #fff;
+  background: var(--youtube-red);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 7px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  flex: 1 1 auto;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(255, 0, 0, 0.3);
+}
+
+.yt-link-btn:hover {
+  background: #cc0000;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 0, 0, 0.5);
+}
+
+.toss-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #4a9eff;
+  background: rgba(49, 130, 246, 0.12);
+  border: 1px solid rgba(49, 130, 246, 0.3);
+  padding: 6px 10px;
+  border-radius: 7px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.toss-btn:hover {
+  background: rgba(49, 130, 246, 0.25);
+  border-color: #3182f6;
+  color: #fff;
 }
 
 /* 마일스톤 D+N 칩 */
@@ -691,12 +1011,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* 목표주가 진척도 프로그레스 바 */
+/* 목표주가 진척도 */
 .target-progress-box {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 2px 0;
+  gap: 5px;
 }
 
 .target-meta-row {
@@ -754,14 +1073,14 @@ body {
   transition: width 0.6s var(--ease-smooth);
 }
 
-/* 인터랙티브 차트 (스파크라인) */
+/* 스파크라인 차트 */
 .chart-container {
   width: 100%;
-  height: 120px;
+  height: 110px;
   position: relative;
   background: rgba(7, 11, 20, 0.6);
   border-radius: 10px;
-  padding: 8px 6px 0;
+  padding: 6px 6px 0;
 }
 
 .chart-svg {
@@ -770,41 +1089,14 @@ body {
   overflow: visible;
 }
 
-/* 카드 하단 액션 & 아코디언 */
+/* 카드 하단 액션 & 일별 기록 아코디언 */
 .card-bottom-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
   border-top: 1px solid var(--border-subtle);
-  padding-top: 12px;
-  margin-top: 2px;
-}
-
-.yt-link-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-main);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  padding: 5px 12px;
-  border-radius: 6px;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 12px;
-  transition: all 0.2s ease;
-}
-
-.yt-link-btn:hover {
-  background: #ff0000;
-  color: #fff;
-  border-color: #ff0000;
-  box-shadow: 0 4px 12px rgba(255, 0, 0, 0.4);
-}
-
-.yt-icon {
-  font-size: 13px;
+  padding-top: 10px;
 }
 
 .history-toggle {
@@ -822,11 +1114,10 @@ body {
   color: var(--text-main);
 }
 
-/* 일별 거래 테이블 아코디언 */
 .card-history-details {
   border-top: 1px dashed var(--border-subtle);
-  padding-top: 12px;
-  margin-top: 6px;
+  padding-top: 10px;
+  margin-top: 4px;
 }
 
 .history-mini-table {
@@ -837,7 +1128,7 @@ body {
 
 .history-mini-table th,
 .history-mini-table td {
-  padding: 6px 4px;
+  padding: 5px 4px;
   text-align: right;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
@@ -852,7 +1143,7 @@ body {
   font-weight: 600;
 }
 
-/* ═══════════════ 테이블 뷰 (목록형 뷰) ═══════════════ */
+/* ═══════════════ 테이블 뷰 (모드 3) ═══════════════ */
 .table-container {
   background: var(--bg-card);
   backdrop-filter: blur(14px);
@@ -875,7 +1166,7 @@ body {
 
 .fin-table th,
 .fin-table td {
-  padding: 14px 16px;
+  padding: 12px 14px;
   text-align: right;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -883,7 +1174,11 @@ body {
 .fin-table th:first-child,
 .fin-table td:first-child,
 .fin-table th:nth-child(2),
-.fin-table td:nth-child(2) {
+.fin-table td:nth-child(2),
+.fin-table th:nth-child(10),
+.fin-table td:nth-child(10),
+.fin-table th:nth-child(11),
+.fin-table td:nth-child(11) {
   text-align: left;
 }
 
@@ -902,6 +1197,40 @@ body {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.table-naver-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--naver-green);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.table-naver-btn:hover {
+  background: var(--naver-green-hover);
+}
+
+.table-yt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--youtube-red);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.table-yt-btn:hover {
+  background: #cc0000;
+}
+
 /* ═══════════════ 툴팁 & 상태 ═══════════════ */
 .chart-tooltip {
   position: absolute;
@@ -918,7 +1247,6 @@ body {
 }
 
 .loading-state, .empty-state {
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -927,6 +1255,7 @@ body {
   color: var(--text-muted);
   font-size: 15px;
   gap: 16px;
+  width: 100%;
 }
 
 .spinner {
@@ -971,7 +1300,7 @@ body {
 
 @media (max-width: 768px) {
   .dashboard-shell {
-    padding: 24px 16px 60px;
+    padding: 20px 14px 60px;
   }
   .header-top {
     flex-direction: column;
@@ -980,7 +1309,7 @@ body {
   .header-status-box {
     align-items: flex-start;
   }
-  .cards-grid {
+  .date-group-grid, .cards-grid {
     grid-template-columns: 1fr;
   }
   .controls-bar {
@@ -989,6 +1318,7 @@ body {
   }
   .controls-right {
     justify-content: space-between;
+    flex-wrap: wrap;
   }
   .search-wrap {
     max-width: none;

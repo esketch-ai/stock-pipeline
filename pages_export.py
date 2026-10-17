@@ -273,6 +273,12 @@ def format_public_item(record: dict) -> dict:
         str(n): out["history"][n - 1]["changePct"] if len(out["history"]) >= n else None
         for n in (1, 3, 5, 10, 20)
     }
+
+    # 외부 증권 포털 연계 URL
+    ticker = record.get("ticker", "")
+    out["naverFinanceUrl"] = f"https://finance.naver.com/item/main.naver?code={ticker}"
+    out["tossUrl"] = f"https://wts.tossinvest.com/stocks/{ticker}"
+    out["daumFinanceUrl"] = f"https://finance.daum.net/quotes/A{ticker}"
     return out
 
 

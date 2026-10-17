@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>STOCK ANALYSIS · FOLLOW UP | 유튜브 추천 종목 사후 시세 추적</title>
-  <meta name="description" content="AI 주식 분석 영상 추천 당시 기준가격부터 이후 일별 종가까지, 단 하나의 가감 없이 투명하게 시세를 추적합니다." />
+  <meta name="description" content="AI 주식 분석 추천 영상 이후의 일별 종가, 수익률, 네이버 증권 실시간 시세를 투명하게 추적하고 기록합니다." />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
   <link rel="stylesheet" href="style.css" />
@@ -14,19 +14,19 @@
   <div class="glow-bg glow-2"></div>
 
   <main class="dashboard-shell">
-    <!-- ═══════════════ 헤더 영역 ═══════════════ -->
+    <!-- ═══════════════ 상단 헤더 ═══════════════ -->
     <header class="header">
       <div class="header-top">
         <div class="brand">
           <div class="brand-badge">
             <span class="live-dot"></span>
-            <span class="brand-tag">STOCK ANALYSIS &amp; VERIFICATION</span>
+            <span class="brand-tag">STOCK ANALYSIS · REAL-TIME VERIFICATION</span>
           </div>
           <h1 class="main-title">
-            유튜브 추천 종목 <span class="highlight-cyan">사후 시세 추적</span>
+            YouTube 추천 영상 <span class="highlight-cyan">사후 시세 &amp; 성과 추적</span>
           </h1>
           <p class="subtitle">
-            영상 게시 당시의 기준가격부터 이후 거래일 종가까지, 단 하나의 왜곡 없이 투명하게 기록합니다.
+            영상 추천 당시 기준가격부터 최근 거래일 종가까지 일자별로 투명하게 기록하고, 네이버 증권과 직접 연계하여 실시간 시세를 확인합니다.
           </p>
         </div>
 
@@ -35,27 +35,23 @@
             <span class="pulse-ring"></span>
             <span class="status-text" id="updated-text">데이터 로딩 중...</span>
           </div>
-          <div class="status-market-date" id="market-date">조회 기준: 대기 중</div>
+          <div class="status-market-date" id="market-date">거래일 종가 기준: 대기 중</div>
         </div>
       </div>
 
-      <!-- ═══════════════ 핵심 KPI 요약 카드 (4-Grid) ═══════════════ -->
+      <!-- ═══════════════ 4대 핵심 KPI 요약 카드 ═══════════════ -->
       <section class="kpi-section" id="summary-cards">
         <div class="kpi-card">
-          <div class="kpi-label">
-            <span class="kpi-icon">🎬</span> 총 추적 영상
-          </div>
+          <div class="kpi-label"><span class="kpi-icon">🎬</span> 총 추적 영상</div>
           <div class="kpi-value-wrap">
             <strong class="kpi-value" id="kpi-total">-</strong>
-            <span class="kpi-sub" id="kpi-total-sub">실제 게시 영상</span>
+            <span class="kpi-sub" id="kpi-total-sub">YouTube 공개 전수</span>
           </div>
-          <div class="kpi-footer">YouTube 공개 종목 전수 집계</div>
+          <div class="kpi-footer">실제 발행 영상 기준 사후 검증</div>
         </div>
 
         <div class="kpi-card">
-          <div class="kpi-label">
-            <span class="kpi-icon">📈</span> 평균 수익률 (P&amp;L)
-          </div>
+          <div class="kpi-label"><span class="kpi-icon">📈</span> 전체 평균 수익률 (P&amp;L)</div>
           <div class="kpi-value-wrap">
             <strong class="kpi-value" id="kpi-return">-</strong>
             <span class="kpi-sub" id="kpi-return-sub">기준가 대비</span>
@@ -64,9 +60,7 @@
         </div>
 
         <div class="kpi-card">
-          <div class="kpi-label">
-            <span class="kpi-icon">🎯</span> 승률 (Win Rate)
-          </div>
+          <div class="kpi-label"><span class="kpi-icon">🎯</span> 추천 승률 (Win Rate)</div>
           <div class="kpi-value-wrap">
             <strong class="kpi-value" id="kpi-winrate">-</strong>
             <span class="kpi-sub" id="kpi-winrate-sub">상승 종목 비율</span>
@@ -75,9 +69,7 @@
         </div>
 
         <div class="kpi-card">
-          <div class="kpi-label">
-            <span class="kpi-icon">⚡</span> 시세 수신 상태
-          </div>
+          <div class="kpi-label"><span class="kpi-icon">⚡</span> 시세 수신 상태</div>
           <div class="kpi-value-wrap">
             <strong class="kpi-value" id="kpi-active">-</strong>
             <span class="kpi-sub" id="kpi-active-sub">거래일 시세 수신</span>
@@ -87,33 +79,46 @@
       </section>
     </header>
 
-    <!-- ═══════════════ 필터 및 정렬 컨트롤 ═══════════════ -->
+    <!-- ═══════════════ 일자별 타임라인 네비게이터 ═══════════════ -->
+    <section class="date-timeline-bar" aria-label="추천 일자별 타임라인">
+      <div class="date-timeline-head">
+        <span class="date-timeline-title">📅 추천 일자별 영상</span>
+        <span class="date-timeline-count" id="filtered-count-badge">전체 27개 영상</span>
+      </div>
+      <div class="date-chips-wrap" id="date-chips-container">
+        <!-- 동적으로 일자별 칩 생성 -->
+        <button class="date-chip active" data-date="all">전체 (27)</button>
+      </div>
+    </section>
+
+    <!-- ═══════════════ 검색 및 필터 툴바 ═══════════════ -->
     <section class="controls-bar">
+      <!-- 검색창 (초성 검색 지원) -->
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input id="search-input" type="search" placeholder="종목명 또는 6자리 코드 검색 (예: 한화오션, 015260)" autocomplete="off" />
+        <input id="search-input" type="search" placeholder="종목명, 초성(예: ㅎㅎㅇㅅ), 또는 6자리 코드 검색" autocomplete="off" />
+        <button id="search-clear" class="search-clear-btn" title="검색어 지우기" hidden>✕</button>
       </div>
 
       <!-- 아키타입 태그 필터 -->
       <div class="archetype-filter" id="archetype-filters">
-        <button class="filter-chip active" data-archetype="all">전체</button>
+        <button class="filter-chip active" data-archetype="all">전체 스토리</button>
         <button class="filter-chip" data-archetype="저평가 가치 반등">저평가 반등</button>
         <button class="filter-chip" data-archetype="성장 돌파">성장 돌파</button>
         <button class="filter-chip" data-archetype="수급 반전">수급 반전</button>
-        <button class="filter-chip" data-archetype="수급 주도 추세">수급 주도 추세</button>
+        <button class="filter-chip" data-archetype="수급 주도 추세">수급 주도</button>
         <button class="filter-chip" data-archetype="펀더멘털 재평가">재평가</button>
       </div>
 
+      <!-- 우측 컨트롤 (성과 필터, 정렬, 뷰 토글, 새로고침) -->
       <div class="controls-right">
-        <!-- 성과 필터 -->
-        <select id="status-filter" class="custom-select" title="성과 상태 필터">
+        <select id="status-filter" class="custom-select" title="성과 필터">
           <option value="all">성과: 전체</option>
           <option value="profit">수익 중 (+)</option>
           <option value="loss">손실 중 (-)</option>
           <option value="waiting">거래일 대기</option>
         </select>
 
-        <!-- 정렬 셀렉트 -->
         <select id="sort-select" class="custom-select" title="정렬 기준">
           <option value="recent">최신 영상순</option>
           <option value="return_desc">수익률 높은순 ↑</option>
@@ -121,10 +126,11 @@
           <option value="name">종목명 (가나다)</option>
         </select>
 
-        <!-- 뷰 모드 토글 (카드 vs 테이블) -->
+        <!-- 3대 뷰 모드 토글 (일자별 그룹 뷰 / 카드 그리드 / 테이블) -->
         <div class="view-toggle">
-          <button class="view-btn active" id="view-card" title="카드 그리드 뷰">⊞</button>
-          <button class="view-btn" id="view-table" title="테이블 뷰">☰</button>
+          <button class="view-btn active" id="view-grouped" title="일자별 모아보기 뷰">📅 일자별</button>
+          <button class="view-btn" id="view-card" title="카드 그리드 뷰">⊞ 카드</button>
+          <button class="view-btn" id="view-table" title="고밀도 표 뷰">☰ 표</button>
         </div>
 
         <button id="btn-refresh" class="btn-refresh" title="최신 시세 데이터 새로고침">
@@ -133,31 +139,37 @@
       </div>
     </section>
 
-    <!-- 가이드 안내 뱃지 -->
+    <!-- ═══════════════ 가이드 안내 배너 ═══════════════ -->
     <div class="guide-banner">
-      <span class="guide-icon">💡</span>
-      <span>
-        <strong>D+1 / D+5 / D+20</strong>은 영상 추천 이후 관측된 <strong>정규 거래일수</strong>입니다. 
-        기준가격은 영상 제작 당시의 스냅샷 종가이며, 매일 장 마감 후 및 파이프라인 배치 완료 시 자동 갱신됩니다.
-      </span>
+      <div class="guide-item">
+        <span class="guide-badge-naver">N</span>
+        <span><strong>네이버 증권 연계</strong>: 각 종목의 초록색 네이버 증권 버튼을 누르면 실시간 호가/차트/종목토론실로 즉시 이동합니다.</span>
+      </div>
+      <div class="guide-item">
+        <span class="guide-badge-yt">▶</span>
+        <span><strong>유튜브 영상 연계</strong>: 영상 썸네일이나 시청 버튼을 클릭하면 유튜브 실제 방송 영상이 새 창에서 재생됩니다.</span>
+      </div>
     </div>
 
-    <!-- ═══════════════ 종목 카드 그리드 뷰 ═══════════════ -->
-    <section class="cards-grid" id="cards-container" aria-live="polite">
+    <!-- ═══════════════ 메인 컨텐츠 영역 (뷰 모드별 렌더링) ═══════════════ -->
+    <!-- 1. 일자별 그룹 뷰 (기본) -->
+    <section class="grouped-container" id="grouped-container">
       <div class="loading-state">
         <div class="spinner"></div>
         <p>최신 종목 시세 및 사후 기록을 분석 중입니다...</p>
       </div>
     </section>
 
-    <!-- ═══════════════ 종목 테이블 뷰 (옵션 토글) ═══════════════ -->
+    <!-- 2. 전체 카드 그리드 뷰 -->
+    <section class="cards-grid" id="cards-container" hidden></section>
+
+    <!-- 3. 고밀도 금융 테이블 뷰 -->
     <section class="table-container" id="table-container" hidden>
       <div class="table-responsive">
         <table class="fin-table">
           <thead>
             <tr>
-              <th>영상 / 종목</th>
-              <th>스토리 아키타입</th>
+              <th>영상 / 종목명</th>
               <th>추천일 (기준가)</th>
               <th>최근 종가</th>
               <th>누적 수익률</th>
@@ -166,8 +178,9 @@
               <th>D+3</th>
               <th>D+5</th>
               <th>D+20</th>
-              <th>목표가 상태</th>
-              <th>유튜브</th>
+              <th>스토리 아키타입</th>
+              <th>증권 포털 연계</th>
+              <th>YouTube</th>
             </tr>
           </thead>
           <tbody id="table-body"></tbody>
