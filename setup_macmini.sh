@@ -190,16 +190,44 @@ cat << EOF > "$LAUNCH_AGENTS_DIR/com.stockpipeline.daily.plist"
 </plist>
 EOF
 
+# 7-3. 사후 시세 추적 1시간 자동 갱신 데몬 등록
+cat <<EOF > "$LAUNCH_AGENTS_DIR/com.stockpipeline.pages.plist"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.stockpipeline.pages</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>$SCRIPT_DIR/update_public_dashboard.sh</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$SCRIPT_DIR/logs/pages.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>$SCRIPT_DIR/logs/pages.err.log</string>
+</dict>
+</plist>
+EOF
+
 # 기존 서비스 해제 후 재등록
 launchctl unload "$LAUNCH_AGENTS_DIR/com.stockpipeline.dashboard.plist" 2>/dev/null || true
 launchctl unload "$LAUNCH_AGENTS_DIR/com.stockpipeline.daily.plist" 2>/dev/null || true
+launchctl unload "$LAUNCH_AGENTS_DIR/com.stockpipeline.pages.plist" 2>/dev/null || true
 
 launchctl load -w "$LAUNCH_AGENTS_DIR/com.stockpipeline.dashboard.plist"
 launchctl load -w "$LAUNCH_AGENTS_DIR/com.stockpipeline.daily.plist"
+launchctl load -w "$LAUNCH_AGENTS_DIR/com.stockpipeline.pages.plist"
 
 echo "✅ launchd 데몬 등록 완료:"
 echo "   - 대시보드: 부팅 시 자동 시작 (포트 8787)"
 echo "   - 일일 배치: 매일 새벽 02:00 자동 실행"
+echo "   - 시세 추적: 1시간(3600초) 주기 자동 시세 갱신 & 배포"
 
 # ── 8. 통합 시스템 진단 및 셀프 테스트 ─────────────────────────
 echo ""

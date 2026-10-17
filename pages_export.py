@@ -13,6 +13,8 @@ import argparse
 import json
 import math
 import re
+import ssl
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -23,6 +25,23 @@ ROOT = Path(__file__).resolve().parent
 STATE = ROOT / "state" / "price_tracking.json"
 SITE = ROOT / "public-dashboard"
 KST = ZoneInfo("Asia/Seoul")
+_SSL_CTX = ssl._create_unverified_context()
+_NAVER_HDR = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
+
+
+def fetch_naver_realtime_price(ticker: str) -> float | None:
+    """네이버 증권 모바일 API로부터 장중 실시간 현재가/최근 체결가 수집."""
+    try:
+        url = f"https://m.stock.naver.com/api/stock/{ticker}/basic"
+        req = urllib.request.Request(url, headers=_NAVER_HDR)
+        with urllib.request.urlopen(req, context=_SSL_CTX, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            cp = data.get("closePrice")
+            if cp:
+                return float(str(cp).replace(",", ""))
+    except Exception:
+        pass
+    return None
 
 
 def price(value) -> float | None:
@@ -197,8 +216,19 @@ def refresh_record(record: dict, fetch_func, end_date, now_iso: str) -> None:
             latest = max(quotes, key=lambda p: p["date"])
             record["latestQuote"] = latest
 
+        # 평일 장중(09:00~) 실시간 현재가 보강 (KRX에 오늘자 종가가 아직 미반영된 경우)
+        now_dt = datetime.fromisoformat(now_iso)
+        today_str = now_dt.strftime("%Y-%m-%d")
+        if now_dt.weekday() < 5 and now_dt.hour >= 9:
+            if not any(p["date"] == today_str for p in quotes):
+                rt_price = fetch_naver_realtime_price(record["ticker"])
+                if rt_price:
+                    record["latestQuote"] = {"date": today_str, "close": rt_price, "isRealtime": True}
+                    if baseline_date.isoformat() < today_str:
+                        merged[today_str] = {"date": today_str, "close": rt_price}
+
         record["history"] = sorted(merged.values(), key=lambda p: p["date"])
-        record["status"] = "ok" if quotes else "no-new-data"
+        record["status"] = "ok" if (quotes or record.get("latestQuote")) else "no-new-data"
         record["checkedAt"] = now_iso
     except Exception as exc:
         record["status"] = "fetch-error"
@@ -300,7 +330,20 @@ def main():
     new_found = discover_published(archive_dir, records, only_published=not args.all)
     print(f"📡 YouTube 게시 영상 검색: 신규 {new_found}건 발굴 (총 {len(records)}개 추적 대상)")
 
-    end = now.date() if now.hour >= 18 else now.date() - timedelta(days=1)
+    # 갱신 기준일 계산:
+    # 평일(월~금) 09:00 이후면 당일까지 조회 대상 (장중 실시간 반영)
+    # 주말 또는 평일 장 시작 전이면 최근 직전 거래일 기준
+    if now.weekday() < 5 and now.hour >= 9:
+        end = now.date()
+    else:
+        days_back = 1
+        if now.weekday() == 6:       # 일요일 -> 2일 전(금)
+            days_back = 2
+        elif now.weekday() == 0:     # 월요일 아침 -> 3일 전(금)
+            days_back = 3
+        elif now.weekday() == 5:     # 토요일 -> 1일 전(금)
+            days_back = 1
+        end = now.date() - timedelta(days=days_back)
 
     if not args.offline:
         print(f"📈 최신 시세 수집 중 (기준일 ~ {end})...")
