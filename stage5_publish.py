@@ -188,8 +188,13 @@ def build_description(meta: dict, ticker: str) -> str:
         lines.append("")
         lines.append(closing)
     lines.append("")
+    lines.append("📊 [공식] 추천 종목 사후 시세 추적 대시보드:")
+    lines.append("👉 https://esketch-ai.github.io/stock-video-dashboard/")
+    lines.append("※ 영상 추천 당시 기준가격 대비 일별 종가, 누적 수익률, 목표가 달성 여부를 투명하게 직접 비교 검증해 보실 수 있습니다.")
+    lines.append("")
     lines.append(f"▪ 종목: {name} ({ticker})")
-    lines.append("▪ 데이터 출처: 한국거래소(KRX)")
+    lines.append(f"▪ 네이버 증권: https://finance.naver.com/item/main.naver?code={ticker}")
+    lines.append("▪ 데이터 출처: 한국거래소(KRX) & 네이버 증권")
     return "\n".join(lines)
 
 
